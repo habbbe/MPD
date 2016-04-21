@@ -20,12 +20,12 @@
 #include "config.h"
 #include "UsfDecoderPlugin.hxx"
 #include "../DecoderAPI.hxx"
-#include "../DecoderInternal.hxx"
 #include "tag/TagHandler.hxx"
 #include "fs/Path.hxx"
 #include "util/Domain.hxx"
 #include "Log.hxx"
 #include "util/ScopeExit.hxx"
+#include "tag/TagTable.hxx"
 
 #include <usf.h>
 #include <psflib.h>
@@ -108,8 +108,8 @@ usf_info(void *context, const char *name, const char *value)
 }
 
 struct UsfLengths {
-    double length = -1; // Track duration. -1 represents looping infinitely
-    double fade = 0;    // Fade out duration
+    int length = -1; // Track duration. -1 represents looping infinitely
+    int fade = 0;    // Fade out duration
 };
 
 struct UsfTags {
@@ -119,7 +119,10 @@ struct UsfTags {
     UsfTags(UsfLengths &lens, const TagHandler &handler) : lengths(lens), tag_handler(handler) {} 
 };
 
-static double
+/**
+ * Parse a string to 
+ */
+static int
 get_length_from_string(const char *string)
 {
     size_t len = strlen(string);
@@ -149,8 +152,19 @@ get_length_from_string(const char *string)
     }
     total += final_mult*acc;
 
-    return total/1000;
+    return total;
 }
+
+static constexpr struct tag_table usf_tags[] = {
+    {"title", TAG_TITLE},
+    {"artist", TAG_ARTIST},
+    {"composer", TAG_COMPOSER},
+    {"game", TAG_ALBUM},
+    {"year", TAG_DATE},
+    {"genre", TAG_GENRE},
+    {"track", TAG_TRACK},
+    {nullptr, TAG_NUM_OF_ITEM_TYPES}
+};
 
 static void
 set_length_from_tags(UsfLengths &lengths, const char *name, const char *value) {
@@ -169,39 +183,18 @@ usf_lengths_target(void *context, const char *name, const char *value)
     return 0;
 }
 
-static bool
-usf_set_tag(const char *field, const char *name, const char *value, TagType type, UsfTags *tags)
-{
-    if (strcmp(name, field) == 0) {
-        tag_handler_invoke_tag(tags->tag_handler, tags->handler_ctx, type, value);
-        return true;
-    }
-    return false;
-}
-
 static int
 usf_tags_target(void *context, const char *name, const char *value)
 {
-    struct UsfTags *tags = (struct UsfTags*) context;
+    struct UsfTags *tag_context = (struct UsfTags *) context;
 
-    usf_set_tag("title", name, value, TAG_TITLE, tags) ||
-            usf_set_tag("artist", name, value, TAG_ARTIST, tags) ||
-            usf_set_tag("composer", name, value, TAG_COMPOSER, tags) ||
-            usf_set_tag("game", name, value, TAG_ALBUM, tags) ||
-            usf_set_tag("year", name, value, TAG_DATE, tags) ||
-            usf_set_tag("genre", name, value, TAG_GENRE, tags) ||
-            usf_set_tag("track", name, value, TAG_TRACK, tags);
-    set_length_from_tags(tags->lengths, name, value);
-
+    TagType type = tag_table_lookup(usf_tags, name);
+    if (type != TAG_NUM_OF_ITEM_TYPES) {
+        tag_handler_invoke_tag(tag_context->tag_handler, tag_context->handler_ctx, type, value);
+    } else {
+        set_length_from_tags(tag_context->lengths, name, value);
+    }
     return 0;
-}
-
-
-inline static double
-track_lengths(double length, double fade)
-{
-    return length + fade;
-
 }
 
 static void
@@ -237,13 +230,19 @@ usf_file_decode(Decoder &decoder, Path path_fs)
     const AudioFormat audio_format(sample_rate, SampleFormat::S16, USF_CHANNELS);
     assert(audio_format.IsValid());
 
-    double total_length =  track_lengths(lengths.length, lengths.fade);
+
+    SongTime track(lengths.length);
+    int track_length =  lengths.length;
 
     // Duration
-    decoder_initialized(decoder, audio_format, true, SongTime::FromS(total_length));
+    decoder_initialized(decoder, audio_format, true, track);
 
     /* .. and play */
     DecoderCommand cmd;
+    int decoded_frames = 0;
+    int total_frames = (lengths.length/1000)*sample_rate;
+    int fade_frames = (lengths.fade/1000)*sample_rate;
+
     do {
         int16_t buf[USF_BUFFER_SAMPLES];
         const char* result = usf_render(state.emu, buf, USF_BUFFER_FRAMES, 0);
@@ -251,12 +250,12 @@ usf_file_decode(Decoder &decoder, Path path_fs)
             LogWarning(usf_domain, result);
             break;
         }
+        decoded_frames += USF_BUFFER_FRAMES; 
+        
 
-        // Simple fading
-        double fade_time = lengths.fade;
-        double track_length = lengths.length;
-        if (fade_time > 0 && total_length >= 0 && decoder.timestamp > track_length) {
-            const double vol = 1.0 - ((decoder.timestamp - track_length) / fade_time);
+        // Linear fade out
+        if (fade_frames > 0 && track_length >= 0 && decoded_frames > total_frames - fade_frames) {
+            const double vol = 1.0 - ((decoded_frames + fade_frames - total_frames) / (double)fade_frames);
             const double normalized_vol = vol < 0 ? 0 : vol;
             for (unsigned int i = 0; i < USF_BUFFER_SAMPLES; i++) {
                 buf[i] *= normalized_vol;
@@ -265,26 +264,26 @@ usf_file_decode(Decoder &decoder, Path path_fs)
 
         cmd = decoder_data(decoder, nullptr, buf, sizeof(buf), 0);
 
-        // Stop song manually
-        if (total_length >= 0 && decoder.timestamp > total_length+2)
+        // Stop the song when the total samples have been decoded
+        if (track_length >= 0 && decoded_frames > total_frames)
             break;
 
         if (cmd == DecoderCommand::SEEK) {
             // If user seeks during the fade period. Disable fading and play forever.
             // Hacky way to give user posibility to enable looping on the fly
-            if (decoder.timestamp > track_length) {
-                total_length = -1;
+            if (decoded_frames > total_frames - fade_frames) {
+                track_length = -1;
             }
             // Seek manually by restarting emulator and discarding samples.
-            const double target_time = decoder_seek_time(decoder).ToDoubleS();
+            const int target_time = decoder_seek_time(decoder).ToMS()/1000;
+            const int frames_to_throw = target_time*sample_rate;
             usf_restart(state.emu);
-            const unsigned frames_to_throw = (unsigned) (sample_rate*target_time+0.5);
             usf_render(state.emu, 0, frames_to_throw, 0);
 
             // Time correction after seek. Decided by trial and error.
             decoder_command_finished(decoder);
-            double newTime = (frames_to_throw/(double)sample_rate)-0.5;
-            decoder_timestamp(decoder, newTime);
+            decoder_timestamp(decoder, double(target_time));
+            decoded_frames = frames_to_throw;
         }
 
     } while (cmd != DecoderCommand::STOP);
@@ -304,10 +303,7 @@ usf_scan_file(Path path_fs, const struct TagHandler &handler, void *handler_ctx)
     }
 
     // Duration
-    double total_length = track_lengths(lengths.length, lengths.fade);
-    printf("Length: %f\n", total_length);
-
-    tag_handler_invoke_duration(handler, handler_ctx, SongTime::FromS(total_length));
+    tag_handler_invoke_duration(handler, handler_ctx, SongTime::FromMS(lengths.length));
     return true;
 }
 
