@@ -268,7 +268,7 @@ usf_file_decode(Decoder &decoder, Path path_fs)
         cmd = decoder_data(decoder, nullptr, buf, sizeof(buf), 0);
 
         // Stop the song when the total samples have been decoded
-        // If set to loop, play indefinitely
+        // or loop
         if (!loop && decoded_frames > total_frames)
             break;
 
@@ -283,10 +283,8 @@ usf_file_decode(Decoder &decoder, Path path_fs)
             const int frames_to_throw = target_time*sample_rate;
             usf_restart(state.emu);
             usf_render(state.emu, nullptr, frames_to_throw, nullptr);
-
-            // Time correction after seek. Decided by trial and error.
             decoder_command_finished(decoder);
-            decoder_timestamp(decoder, double(target_time));
+            decoder_timestamp(decoder, target_time);
             decoded_frames = frames_to_throw;
         }
 
