@@ -239,13 +239,9 @@ usf_file_decode(Decoder &decoder, Path path_fs)
     bool loop = lengths.length == 0;
     unsigned long decoded_frames = 0;
     unsigned long total_frames = 0;
-    unsigned long fade_frames = 0;
     if (!loop) {
         total_frames = (lengths.length*sample_rate)/1000;
-        fade_frames = (lengths.fade*sample_rate)/1000;
     }
-    unsigned long fade_start_time = total_frames - fade_frames;
-    bool fade = lengths.fade > 0;
 
     do {
         int16_t buf[USF_BUFFER_SAMPLES];
@@ -255,15 +251,6 @@ usf_file_decode(Decoder &decoder, Path path_fs)
             break;
         }
         decoded_frames += USF_BUFFER_FRAMES; 
-        
-        // Linear fade out
-        if (!loop && fade && decoded_frames > fade_start_time) {
-            const double vol = 1.0 - ((decoded_frames + fade_frames - total_frames) / (double)fade_frames);
-            const double normalized_vol = vol < 0 ? 0 : vol;
-            for (unsigned int i = 0; i < USF_BUFFER_SAMPLES; i++) {
-                buf[i] *= normalized_vol;
-            }
-        }
 
         cmd = decoder_data(decoder, nullptr, buf, sizeof(buf), 0);
 
@@ -273,11 +260,6 @@ usf_file_decode(Decoder &decoder, Path path_fs)
             break;
 
         if (cmd == DecoderCommand::SEEK) {
-            // If user seeks during the fade period. Disable fading and play forever.
-            // Hacky way to give user posibility to enable looping on the fly
-            if (decoded_frames > fade_start_time) {
-                loop = true;
-            }
             // Seek manually by restarting emulator and discarding samples.
             const int target_time = decoder_seek_time(decoder).ToMS()/1000;
             const int frames_to_throw = target_time*sample_rate;
