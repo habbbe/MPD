@@ -108,8 +108,8 @@ usf_info(void *context, const char *name, const char *value)
 }
 
 struct UsfLengths {
-    int length = -1; // Track duration. -1 represents looping infinitely
-    int fade = 0;    // Fade out duration
+    unsigned long length = 0; // Track duration.
+    unsigned long fade = 0;   // Fade out duration
 };
 
 struct UsfTags {
@@ -230,31 +230,34 @@ usf_file_decode(Decoder &decoder, Path path_fs)
     const AudioFormat audio_format(sample_rate, SampleFormat::S16, USF_CHANNELS);
     assert(audio_format.IsValid());
 
-
-    SongTime track(lengths.length);
-    int track_length =  lengths.length;
-
     // Duration
-    decoder_initialized(decoder, audio_format, true, track);
+    decoder_initialized(decoder, audio_format, true, SongTime(lengths.length));
 
     /* .. and play */
     DecoderCommand cmd;
-    int decoded_frames = 0;
-    int total_frames = (lengths.length/1000)*sample_rate;
-    int fade_frames = (lengths.fade/1000)*sample_rate;
+
+    bool loop = lengths.length == 0;
+    unsigned long decoded_frames = 0;
+    unsigned long total_frames = 0;
+    unsigned long fade_frames = 0;
+    if (!loop) {
+        total_frames = (lengths.length*sample_rate)/1000;
+        fade_frames = (lengths.fade*sample_rate)/1000;
+    }
+    unsigned long fade_start_time = total_frames - fade_frames;
+    bool fade = lengths.fade > 0;
 
     do {
         int16_t buf[USF_BUFFER_SAMPLES];
-        const char* result = usf_render(state.emu, buf, USF_BUFFER_FRAMES, 0);
+        const char* result = usf_render(state.emu, buf, USF_BUFFER_FRAMES, nullptr);
         if (result != 0) {
             LogWarning(usf_domain, result);
             break;
         }
         decoded_frames += USF_BUFFER_FRAMES; 
         
-
         // Linear fade out
-        if (fade_frames > 0 && track_length >= 0 && decoded_frames > total_frames - fade_frames) {
+        if (!loop && fade && decoded_frames > fade_start_time) {
             const double vol = 1.0 - ((decoded_frames + fade_frames - total_frames) / (double)fade_frames);
             const double normalized_vol = vol < 0 ? 0 : vol;
             for (unsigned int i = 0; i < USF_BUFFER_SAMPLES; i++) {
@@ -265,20 +268,21 @@ usf_file_decode(Decoder &decoder, Path path_fs)
         cmd = decoder_data(decoder, nullptr, buf, sizeof(buf), 0);
 
         // Stop the song when the total samples have been decoded
-        if (track_length >= 0 && decoded_frames > total_frames)
+        // If set to loop, play indefinitely
+        if (!loop && decoded_frames > total_frames)
             break;
 
         if (cmd == DecoderCommand::SEEK) {
             // If user seeks during the fade period. Disable fading and play forever.
             // Hacky way to give user posibility to enable looping on the fly
-            if (decoded_frames > total_frames - fade_frames) {
-                track_length = -1;
+            if (decoded_frames > fade_start_time) {
+                loop = true;
             }
             // Seek manually by restarting emulator and discarding samples.
             const int target_time = decoder_seek_time(decoder).ToMS()/1000;
             const int frames_to_throw = target_time*sample_rate;
             usf_restart(state.emu);
-            usf_render(state.emu, 0, frames_to_throw, 0);
+            usf_render(state.emu, nullptr, frames_to_throw, nullptr);
 
             // Time correction after seek. Decided by trial and error.
             decoder_command_finished(decoder);
