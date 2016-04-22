@@ -75,40 +75,29 @@ static constexpr psf_file_callbacks stdio_callbacks =
     stdio_ftell
 };
 
-struct UsfLoaderState
-{
-    bool enable_compare; // The _enablecompare tag is present in the file; passed to usf_set_compare
-    bool enable_fifo_full; // The _enableFIFOfull tag is present in the file; passed to usf_set_fifo_full
-    void *emu; // The emulator state
+static constexpr struct tag_table usf_tags[] = {
+    {"title", TAG_TITLE},
+    {"artist", TAG_ARTIST},
+    {"composer", TAG_COMPOSER},
+    {"game", TAG_ALBUM},
+    {"year", TAG_DATE},
+    {"genre", TAG_GENRE},
+    {"track", TAG_TRACK},
+    {nullptr, TAG_NUM_OF_ITEM_TYPES}
 };
-
-static int
-usf_loader(void *context, const uint8_t *exe, size_t exe_size,
-               const uint8_t *reserved, size_t reserved_size)
-{
-    struct UsfLoaderState *state = ( struct UsfLoaderState * ) context;
-
-    if (exe && exe_size > 0) return -1;
-
-    return usf_upload_section(state->emu, reserved, reserved_size);
-}
-
-static int
-usf_info(void *context, const char *name, const char *value)
-{
-    struct UsfLoaderState *state = (struct UsfLoaderState *) context;
-
-    if ( strcmp( name, "_enablecompare" ) == 0)
-        state->enable_compare = 1;
-    else if ( strcmp( name, "_enableFIFOfull" ) == 0)
-        state->enable_fifo_full = 1;
-
-    return 0;
-}
 
 struct UsfLengths {
     unsigned long length = 0; // Track duration.
     unsigned long fade = 0;   // Fade out duration
+};
+
+struct UsfLoaderState
+{
+    bool enable_compare; // The _enablecompare tag is present in the file; passed to usf_set_compare
+    bool enable_fifo_full; // The _enableFIFOfull tag is present in the file; passed to usf_set_fifo_full
+    UsfLengths &lengths;
+    void *emu; // The emulator state
+    UsfLoaderState(UsfLengths &len) : lengths(len) {}
 };
 
 struct UsfTags {
@@ -119,7 +108,7 @@ struct UsfTags {
 };
 
 /**
- * Parse a string to 
+ * Parse a time (in ms) from a tag on the format mm:SS.sss
  */
 static int
 get_length_from_string(const char *string)
@@ -154,17 +143,9 @@ get_length_from_string(const char *string)
     return total;
 }
 
-static constexpr struct tag_table usf_tags[] = {
-    {"title", TAG_TITLE},
-    {"artist", TAG_ARTIST},
-    {"composer", TAG_COMPOSER},
-    {"game", TAG_ALBUM},
-    {"year", TAG_DATE},
-    {"genre", TAG_GENRE},
-    {"track", TAG_TRACK},
-    {nullptr, TAG_NUM_OF_ITEM_TYPES}
-};
-
+/**
+ * Store track lengths by tag
+ */
 static void
 set_length_from_tags(UsfLengths &lengths, const char *name, const char *value) {
     if (strcmp("length", name) == 0) {
@@ -175,13 +156,34 @@ set_length_from_tags(UsfLengths &lengths, const char *name, const char *value) {
 }
 
 static int
-usf_lengths_target(void *context, const char *name, const char *value)
+usf_loader(void *context, const uint8_t *exe, size_t exe_size,
+               const uint8_t *reserved, size_t reserved_size)
 {
-    struct UsfLengths *lengths = (struct UsfLengths *) context;
-    set_length_from_tags(*lengths, name, value);
+    struct UsfLoaderState *state = ( struct UsfLoaderState * ) context;
+
+    if (exe && exe_size > 0) return -1;
+
+    return usf_upload_section(state->emu, reserved, reserved_size);
+}
+
+static int
+usf_info(void *context, const char *name, const char *value)
+{
+    struct UsfLoaderState *state = (struct UsfLoaderState *) context;
+
+    if ( strcmp( name, "_enablecompare" ) == 0)
+        state->enable_compare = 1;
+    else if ( strcmp( name, "_enableFIFOfull" ) == 0)
+        state->enable_fifo_full = 1;
+    else {
+        set_length_from_tags(state->lengths, name, value);
+    }
     return 0;
 }
 
+/**
+ * Callback for getting and setting tags
+ */
 static int
 usf_tags_target(void *context, const char *name, const char *value)
 {
@@ -202,18 +204,18 @@ usf_file_decode(Decoder &decoder, Path path_fs)
     /* Load the file */
 
     UsfLengths lengths;
-    UsfLoaderState state;
+    UsfLoaderState state(lengths);
     state.emu = malloc(usf_get_state_size());
     usf_clear(state.emu);
     AtScopeExit(&state) {
         free(state.emu);
     };
 
-    const char* path = path_fs.c_str();
-    const int psf_version_tags = psf_load(path, &stdio_callbacks, 0, 0, 0, usf_lengths_target, &lengths, 0);
-    const int psf_version_state = psf_load( path, &stdio_callbacks, psf_version_tags, usf_loader, &state, usf_info, &state, 0 );
+    // 0x21 represents the miniusf file format
+    const int psf_version = psf_load( path_fs.c_str(), &stdio_callbacks, 0x21, usf_loader, &state, usf_info, &state, 0 );
 
-    if ( psf_version_tags != 0x21 || psf_version_state <= 0 ) {
+    // If psf_version < 0  an error occured while loading the file.
+    if (psf_version < 0) {
         LogWarning(usf_domain, "Error loading usf file");
         return;
     }
