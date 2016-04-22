@@ -262,7 +262,7 @@ usf_file_decode(Decoder &decoder, Path path_fs)
 
         if (cmd == DecoderCommand::SEEK) {
             // Seek manually by restarting emulator and discarding samples.
-            const int target_time = decoder_seek_time(decoder).ToMS()/1000;
+            const int target_time = decoder_seek_time(decoder).ToS();
             const int frames_to_throw = target_time*sample_rate;
             usf_restart(state.emu);
             usf_render(state.emu, nullptr, frames_to_throw, nullptr);
