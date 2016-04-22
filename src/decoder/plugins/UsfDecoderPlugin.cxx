@@ -237,12 +237,9 @@ usf_file_decode(Decoder &decoder, Path path_fs)
     /* .. and play */
     DecoderCommand cmd;
 
-    bool loop = lengths.length == 0;
+    bool loop = lengths.length == 0; // When song has no length, enable looping
     unsigned long decoded_frames = 0;
-    unsigned long total_frames = 0;
-    if (!loop) {
-        total_frames = (lengths.length*sample_rate)/1000;
-    }
+    unsigned long total_frames = loop ? 0 : (lengths.length*sample_rate)/1000;
 
     do {
         int16_t buf[USF_BUFFER_SAMPLES];
