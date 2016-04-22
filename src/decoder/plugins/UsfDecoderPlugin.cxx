@@ -97,7 +97,6 @@ static int
 usf_info(void *context, const char *name, const char *value)
 {
     struct UsfLoaderState *state = (struct UsfLoaderState *) context;
-    if (!value) return 0;
 
     if ( strcmp( name, "_enablecompare" ) == 0)
         state->enable_compare = 1;
