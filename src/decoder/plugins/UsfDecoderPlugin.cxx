@@ -239,7 +239,14 @@ usf_file_decode(DecoderClient &client, Path path_fs)
 
     bool loop = lengths.length == 0; // When song has no length, enable looping
     unsigned long decoded_frames = 0;
-    unsigned long total_frames = loop ? 0 : (lengths.length*sample_rate)/1000;
+    unsigned long total_frames = 0;
+    unsigned long fade_frames = 0;
+    if (!loop) {
+        total_frames = (lengths.length*sample_rate)/1000;
+        fade_frames = (lengths.fade*sample_rate)/1000;
+    }
+    unsigned long fade_start_time = total_frames - fade_frames;
+    bool fade = lengths.fade > 0;
 
     do {
         int16_t buf[USF_BUFFER_SAMPLES];
@@ -250,6 +257,15 @@ usf_file_decode(DecoderClient &client, Path path_fs)
         }
         decoded_frames += USF_BUFFER_FRAMES; 
 
+        // Linear fade out
+        if (!loop && fade && decoded_frames > fade_start_time) {
+            const double vol = 1.0 - ((decoded_frames + fade_frames - total_frames) / (double)fade_frames);
+            const double normalized_vol = vol < 0 ? 0 : vol;
+            for (unsigned int i = 0; i < USF_BUFFER_SAMPLES; i++) {
+                buf[i] *= normalized_vol;
+            }
+        }
+
         cmd = client.SubmitData(nullptr, buf, sizeof(buf), 0);
 
         // Stop the song when the total samples have been decoded
@@ -258,6 +274,11 @@ usf_file_decode(DecoderClient &client, Path path_fs)
             break;
 
         if (cmd == DecoderCommand::SEEK) {
+            // If user seeks during the fade period. Disable fading and play forever.
+            // Hacky way to give user posibility to enable looping on the fly
+            if (decoded_frames > fade_start_time) {
+                loop = true;
+            }
             // Seek manually by restarting emulator and discarding samples.
             const int target_time = client.GetSeekTime().ToS();
             const int frames_to_throw = target_time*sample_rate;
