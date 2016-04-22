@@ -245,7 +245,7 @@ usf_file_decode(Decoder &decoder, Path path_fs)
         int16_t buf[USF_BUFFER_SAMPLES];
         const char* result = usf_render(state.emu, buf, USF_BUFFER_FRAMES, nullptr);
         if (result != 0) {
-            LogWarning(usf_domain, result);
+            FormatWarning(usf_domain, "usf_render failed: %s", result);
             break;
         }
         decoded_frames += USF_BUFFER_FRAMES; 
