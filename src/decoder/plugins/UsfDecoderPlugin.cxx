@@ -60,7 +60,7 @@ stdio_fclose(void *f)
 }
 
 static long
-stdio_ftell( void * f )
+stdio_ftell(void *f)
 {
     return ftell((FILE *) f);
 }
@@ -159,7 +159,7 @@ static int
 usf_loader(void *context, const uint8_t *exe, size_t exe_size,
                const uint8_t *reserved, size_t reserved_size)
 {
-    struct UsfLoaderState *state = ( struct UsfLoaderState * ) context;
+    struct UsfLoaderState *state = (struct UsfLoaderState *) context;
 
     if (exe && exe_size > 0) return -1;
 
@@ -171,9 +171,9 @@ usf_info(void *context, const char *name, const char *value)
 {
     struct UsfLoaderState *state = (struct UsfLoaderState *) context;
 
-    if ( strcmp( name, "_enablecompare" ) == 0)
+    if (strcmp(name, "_enablecompare") == 0)
         state->enable_compare = 1;
-    else if ( strcmp( name, "_enableFIFOfull" ) == 0)
+    else if (strcmp(name, "_enableFIFOfull") == 0)
         state->enable_fifo_full = 1;
     else {
         set_length_from_tags(state->lengths, name, value);
@@ -212,7 +212,7 @@ usf_file_decode(Decoder &decoder, Path path_fs)
     };
 
     // 0x21 represents the miniusf file format
-    const int psf_version = psf_load( path_fs.c_str(), &stdio_callbacks, 0x21, usf_loader, &state, usf_info, &state, 0 );
+    const int psf_version = psf_load(path_fs.c_str(), &stdio_callbacks, 0x21, usf_loader, &state, usf_info, &state, 0);
 
     // If psf_version < 0  an error occured while loading the file.
     if (psf_version < 0) {
