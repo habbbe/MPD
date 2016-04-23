@@ -259,7 +259,7 @@ usf_file_decode(DecoderClient &client, Path path_fs)
 
         // Linear fade out
         if (!loop && fade && decoded_frames > fade_start_time) {
-            const double vol = 1.0 - ((decoded_frames + fade_frames - total_frames) / (double)fade_frames);
+            const double vol = 1.0 - ((decoded_frames + fade_frames - total_frames) / double(fade_frames));
             const double normalized_vol = vol < 0 ? 0 : vol;
             for (unsigned int i = 0; i < USF_BUFFER_SAMPLES; i++) {
                 buf[i] *= normalized_vol;
