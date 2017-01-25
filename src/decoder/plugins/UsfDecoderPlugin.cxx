@@ -199,7 +199,7 @@ usf_tags_target(void *context, const char *name, const char *value)
 }
 
 static void
-usf_file_decode(Decoder &decoder, Path path_fs)
+usf_file_decode(DecoderClient &client, Path path_fs)
 {
     /* Load the file */
 
@@ -232,7 +232,7 @@ usf_file_decode(Decoder &decoder, Path path_fs)
     assert(audio_format.IsValid());
 
     // Duration
-    decoder_initialized(decoder, audio_format, true, SongTime(lengths.length));
+    client.Ready(audio_format, true, SongTime(lengths.length));
 
     /* .. and play */
     DecoderCommand cmd;
@@ -250,7 +250,7 @@ usf_file_decode(Decoder &decoder, Path path_fs)
         }
         decoded_frames += USF_BUFFER_FRAMES; 
 
-        cmd = decoder_data(decoder, nullptr, buf, sizeof(buf), 0);
+        cmd = client.SubmitData(nullptr, buf, sizeof(buf), 0);
 
         // Stop the song when the total samples have been decoded
         // or loop
@@ -259,12 +259,12 @@ usf_file_decode(Decoder &decoder, Path path_fs)
 
         if (cmd == DecoderCommand::SEEK) {
             // Seek manually by restarting emulator and discarding samples.
-            const int target_time = decoder_seek_time(decoder).ToS();
+            const int target_time = client.GetSeekTime().ToS();
             const int frames_to_throw = target_time*sample_rate;
             usf_restart(state.emu);
             usf_render(state.emu, nullptr, frames_to_throw, nullptr);
-            decoder_command_finished(decoder);
-            decoder_timestamp(decoder, target_time);
+            client.CommandFinished();
+            client.SubmitTimestamp(target_time);
             decoded_frames = frames_to_throw;
         }
 
