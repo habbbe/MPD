@@ -20,12 +20,12 @@
 #include "config.h"
 #include "UsfDecoderPlugin.hxx"
 #include "../DecoderAPI.hxx"
-#include "tag/TagHandler.hxx"
+#include "tag/Handler.hxx"
 #include "fs/Path.hxx"
 #include "util/Domain.hxx"
 #include "Log.hxx"
 #include "util/ScopeExit.hxx"
-#include "tag/TagTable.hxx"
+#include "tag/Table.hxx"
 
 #include <usf.h>
 #include <psflib.h>
