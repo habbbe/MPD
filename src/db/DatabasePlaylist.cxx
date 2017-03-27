@@ -27,24 +27,23 @@
 
 #include <functional>
 
-static bool
-AddSong(const Storage &storage, const char *playlist_path_utf8,
+static void
+AddSong(const Storage *storage, const char *playlist_path_utf8,
 	const LightSong &song)
 {
 	spl_append_song(playlist_path_utf8,
 			DatabaseDetachSong(storage, song));
-	return true;
 }
 
 void
-search_add_to_playlist(const Database &db, const Storage &storage,
+search_add_to_playlist(const Database &db, const Storage *storage,
 		       const char *uri, const char *playlist_path_utf8,
 		       const SongFilter *filter)
 {
 	const DatabaseSelection selection(uri, true, filter);
 
 	using namespace std::placeholders;
-	const auto f = std::bind(AddSong, std::ref(storage),
+	const auto f = std::bind(AddSong, storage,
 				 playlist_path_utf8, _1);
 	db.Visit(selection, f);
 }

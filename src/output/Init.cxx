@@ -51,7 +51,8 @@
 
 AudioOutput::AudioOutput(const AudioOutputPlugin &_plugin,
 			 const ConfigBlock &block)
-	:plugin(_plugin)
+	:plugin(_plugin),
+	 thread(BIND_THIS_METHOD(Task))
 {
 	assert(plugin.finish != nullptr);
 	assert(plugin.open != nullptr);
@@ -295,7 +296,7 @@ audio_output_new(EventLoop &event_loop,
 			      plugin->name);
 	}
 
-	AudioOutput *ao = ao_plugin_init(*plugin, block);
+	AudioOutput *ao = ao_plugin_init(event_loop, *plugin, block);
 	assert(ao != nullptr);
 
 	try {

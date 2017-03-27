@@ -23,13 +23,21 @@
 #include "check.h"
 #include "Compiler.h"
 
+class EventLoop;
 class NfsConnection;
 
 void
-nfs_init();
+nfs_init(EventLoop &event_loop);
 
 void
 nfs_finish();
+
+/**
+ * Return the EventLoop that was passed to nfs_init().
+ */
+gcc_const
+EventLoop &
+nfs_get_event_loop();
 
 gcc_pure
 NfsConnection &

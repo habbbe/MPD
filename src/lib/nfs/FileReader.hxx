@@ -67,6 +67,8 @@ public:
 	NfsFileReader();
 	~NfsFileReader();
 
+	using DeferredMonitor::GetEventLoop;
+
 	void Close();
 	void DeferClose();
 

@@ -24,6 +24,7 @@
 #include "../Wrapper.hxx"
 #include "mixer/MixerList.hxx"
 #include "util/Domain.hxx"
+#include "system/Error.hxx"
 #include "Log.hxx"
 
 #include <AppFileInfo.h>
@@ -71,7 +72,8 @@ public:
 
 	~HaikuOutput();
 
-	static HaikuOutput *Create(const ConfigBlock &block);
+	static HaikuOutput *Create(EventLoop &event_loop,
+				   const ConfigBlock &block);
 
 	void Open(AudioFormat &audio_format);
 	void Close();
@@ -119,7 +121,7 @@ haiku_test_default_device(void)
 }
 
 inline HaikuOutput *
-HaikuOutput::Create(const ConfigBlock &block)
+HaikuOutput::Create(EventLoop &, const ConfigBlock &block)
 {
 	initialize_application();
 

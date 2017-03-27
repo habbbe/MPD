@@ -23,6 +23,7 @@
 #include "../InputPlugin.hxx"
 #include "lib/nfs/Glue.hxx"
 #include "lib/nfs/FileReader.hxx"
+#include "thread/Cond.hxx"
 #include "util/StringCompare.hxx"
 
 #include <string.h>
@@ -39,17 +40,17 @@ static const size_t NFS_MAX_BUFFERED = 512 * 1024;
  */
 static const size_t NFS_RESUME_AT = 384 * 1024;
 
-class NfsInputStream final : public AsyncInputStream, NfsFileReader {
+class NfsInputStream final : NfsFileReader, public AsyncInputStream {
 	uint64_t next_offset;
 
-	bool reconnect_on_resume, reconnecting;
+	bool reconnect_on_resume = false, reconnecting = false;
 
 public:
 	NfsInputStream(const char *_uri, Mutex &_mutex, Cond &_cond)
-		:AsyncInputStream(_uri, _mutex, _cond,
+		:AsyncInputStream(NfsFileReader::GetEventLoop(),
+				  _uri, _mutex, _cond,
 				  NFS_MAX_BUFFERED,
-				  NFS_RESUME_AT),
-		 reconnect_on_resume(false), reconnecting(false) {}
+				  NFS_RESUME_AT) {}
 
 	virtual ~NfsInputStream() {
 		DeferClose();
@@ -204,9 +205,9 @@ NfsInputStream::OnNfsFileError(std::exception_ptr &&e)
  */
 
 static void
-input_nfs_init(const ConfigBlock &)
+input_nfs_init(EventLoop &event_loop, const ConfigBlock &)
 {
-	nfs_init();
+	nfs_init(event_loop);
 }
 
 static void

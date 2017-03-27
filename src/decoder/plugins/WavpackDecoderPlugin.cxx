@@ -22,7 +22,7 @@
 #include "../DecoderAPI.hxx"
 #include "input/InputStream.hxx"
 #include "CheckAudioFormat.hxx"
-#include "tag/TagHandler.hxx"
+#include "tag/Handler.hxx"
 #include "fs/Path.hxx"
 #include "util/Macros.hxx"
 #include "util/Alloc.hxx"
@@ -33,6 +33,8 @@
 
 #include <stdexcept>
 #include <memory>
+
+#include <cstdlib>
 
 #include <assert.h>
 

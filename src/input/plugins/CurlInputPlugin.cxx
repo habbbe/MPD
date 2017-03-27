@@ -29,9 +29,10 @@
 #include "../InputPlugin.hxx"
 #include "config/ConfigGlobal.hxx"
 #include "config/Block.hxx"
-#include "tag/TagBuilder.hxx"
+#include "tag/Builder.hxx"
 #include "event/Call.hxx"
-#include "IOThread.hxx"
+#include "event/Loop.hxx"
+#include "thread/Cond.hxx"
 #include "util/ASCII.hxx"
 #include "util/StringUtil.hxx"
 #include "util/NumberParser.hxx"
@@ -72,8 +73,9 @@ struct CurlInputStream final : public AsyncInputStream, CurlResponseHandler {
 	/** parser for icy-metadata */
 	IcyInputStream *icy;
 
-	CurlInputStream(const char *_url, Mutex &_mutex, Cond &_cond)
-		:AsyncInputStream(_url, _mutex, _cond,
+	CurlInputStream(EventLoop &event_loop, const char *_url,
+			Mutex &_mutex, Cond &_cond)
+		:AsyncInputStream(event_loop, _url, _mutex, _cond,
 				  CURL_MAX_BUFFERED,
 				  CURL_RESUME_AT),
 		 icy(new IcyInputStream(this)) {
@@ -137,7 +139,7 @@ static constexpr Domain curl_domain("curl");
 void
 CurlInputStream::DoResume()
 {
-	assert(io_thread_inside());
+	assert(GetEventLoop().IsInside());
 
 	mutex.unlock();
 	request->Resume();
@@ -147,7 +149,7 @@ CurlInputStream::DoResume()
 void
 CurlInputStream::FreeEasy()
 {
-	assert(io_thread_inside());
+	assert(GetEventLoop().IsInside());
 
 	if (request == nullptr)
 		return;
@@ -161,7 +163,7 @@ CurlInputStream::FreeEasy()
 void
 CurlInputStream::FreeEasyIndirect()
 {
-	BlockingCall(io_thread_get(), [this](){
+	BlockingCall(GetEventLoop(), [this](){
 			FreeEasy();
 			curl_global->InvalidateSockets();
 		});
@@ -171,7 +173,7 @@ void
 CurlInputStream::OnHeaders(unsigned status,
 			   std::multimap<std::string, std::string> &&headers)
 {
-	assert(io_thread_inside());
+	assert(GetEventLoop().IsInside());
 	assert(!postponed_exception);
 
 	if (status < 200 || status >= 300)
@@ -282,7 +284,7 @@ CurlInputStream::OnError(std::exception_ptr e)
  */
 
 static void
-input_curl_init(const ConfigBlock &block)
+input_curl_init(EventLoop &event_loop, const ConfigBlock &block)
 {
 	CURLcode code = curl_global_init(CURL_GLOBAL_ALL);
 	if (code != CURLE_OK)
@@ -316,7 +318,7 @@ input_curl_init(const ConfigBlock &block)
 	verify_host = block.GetBlockValue("verify_host", true);
 
 	try {
-		curl_global = new CurlGlobal(io_thread_get());
+		curl_global = new CurlGlobal(event_loop);
 	} catch (const std::runtime_error &e) {
 		LogError(e);
 		curl_slist_free_all(http_200_aliases);
@@ -328,7 +330,7 @@ input_curl_init(const ConfigBlock &block)
 static void
 input_curl_finish(void)
 {
-	BlockingCall(io_thread_get(), [](){
+	BlockingCall(curl_global->GetEventLoop(), [](){
 			delete curl_global;
 		});
 
@@ -398,7 +400,12 @@ CurlInputStream::SeekInternal(offset_type new_offset)
 	/* send the "Range" header */
 
 	if (offset > 0) {
-		sprintf(range, "%lld-", (long long)offset);
+#ifdef WIN32
+		// TODO: what can we use on Windows to format 64 bit?
+		sprintf(range, "%lu-", (long)offset);
+#else
+		sprintf(range, "%llu-", (unsigned long long)offset);
+#endif
 		request->SetOption(CURLOPT_RANGE, range);
 	}
 }
@@ -410,7 +417,7 @@ CurlInputStream::DoSeek(offset_type new_offset)
 
 	const ScopeUnlock unlock(mutex);
 
-	BlockingCall(io_thread_get(), [this, new_offset](){
+	BlockingCall(GetEventLoop(), [this, new_offset](){
 			SeekInternal(new_offset);
 		});
 }
@@ -418,10 +425,11 @@ CurlInputStream::DoSeek(offset_type new_offset)
 inline InputStream *
 CurlInputStream::Open(const char *url, Mutex &mutex, Cond &cond)
 {
-	CurlInputStream *c = new CurlInputStream(url, mutex, cond);
+	CurlInputStream *c = new CurlInputStream(curl_global->GetEventLoop(),
+						 url, mutex, cond);
 
 	try {
-		BlockingCall(io_thread_get(), [c](){
+		BlockingCall(c->GetEventLoop(), [c](){
 				c->InitEasy();
 			});
 	} catch (...) {

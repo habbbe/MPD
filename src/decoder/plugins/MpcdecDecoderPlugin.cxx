@@ -23,7 +23,7 @@
 #include "input/InputStream.hxx"
 #include "CheckAudioFormat.hxx"
 #include "pcm/Traits.hxx"
-#include "tag/TagHandler.hxx"
+#include "tag/Handler.hxx"
 #include "util/Domain.hxx"
 #include "util/Macros.hxx"
 #include "util/Clamp.hxx"
@@ -206,6 +206,15 @@ mpcdec_decode(DecoderClient &client, InputStream &is)
 
 		if (frame.bits == -1)
 			break;
+
+		if (frame.samples <= 0) {
+			/* empty frame - this has been observed to
+			   happen spuriously after seeking; skip this
+			   obscure frame, and hope libmpcdec
+			   recovers */
+			cmd = client.GetCommand();
+			continue;
+		}
 
 		mpc_uint32_t ret = frame.samples;
 		ret *= info.channels;

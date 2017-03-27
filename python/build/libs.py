@@ -19,8 +19,8 @@ libvorbis = AutotoolsProject(
 )
 
 opus = AutotoolsProject(
-    'http://downloads.xiph.org/releases/opus/opus-1.1.3.tar.gz',
-    '32bbb6b557fe1b6066adc0ae1f08b629',
+    'http://downloads.xiph.org/releases/opus/opus-1.1.4.tar.gz',
+    '9122b6b380081dd2665189f97bfd777f04f92dc3ab6698eea1dbb27ad59d8692',
     'lib/libopus.a',
     ['--disable-shared', '--enable-static'],
 )
@@ -58,8 +58,8 @@ libmad = AutotoolsProject(
 )
 
 ffmpeg = FfmpegProject(
-    'http://ffmpeg.org/releases/ffmpeg-3.2.2.tar.xz',
-    '3f01bd1fe1a17a277f8c84869e5d9192b4b978cb660872aa2b54c3cc8a2fedfc',
+    'http://ffmpeg.org/releases/ffmpeg-3.2.4.tar.xz',
+    '6e38ff14f080c98b58cf5967573501b8cb586e3a173b591f3807d8f0660daf7a',
     'lib/libavcodec.a',
     [
         '--disable-shared', '--enable-static',

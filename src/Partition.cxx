@@ -25,12 +25,14 @@
 #include "IdleFlags.hxx"
 
 Partition::Partition(Instance &_instance,
+		     const char *_name,
 		     unsigned max_length,
 		     unsigned buffer_chunks,
 		     unsigned buffered_before_play,
 		     AudioFormat configured_audio_format,
 		     const ReplayGainConfig &replay_gain_config)
 	:instance(_instance),
+	 name(_name),
 	 global_events(instance.event_loop, BIND_THIS_METHOD(OnGlobalEvent)),
 	 playlist(max_length, *this),
 	 outputs(*this),
@@ -141,9 +143,9 @@ Partition::OnMixerVolumeChanged(gcc_unused Mixer &mixer, gcc_unused int volume)
 void
 Partition::OnGlobalEvent(unsigned mask)
 {
-	if ((mask & TAG_MODIFIED) != 0)
-		TagModified();
-
 	if ((mask & SYNC_WITH_PLAYER) != 0)
 		SyncWithPlayer();
+
+	if ((mask & TAG_MODIFIED) != 0)
+		TagModified();
 }

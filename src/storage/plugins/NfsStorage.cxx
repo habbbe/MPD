@@ -74,7 +74,7 @@ public:
 		 server(std::move(_server)),
 		 export_name(std::move(_export_name)),
 		 state(State::INITIAL) {
-		nfs_init();
+		nfs_init(_loop);
 	}
 
 	~NfsStorage() {
@@ -250,7 +250,7 @@ Copy(StorageFileInfo &info, const struct stat &st)
 		info.type = StorageFileInfo::Type::OTHER;
 
 	info.size = st.st_size;
-	info.mtime = st.st_mtime;
+	info.mtime = std::chrono::system_clock::from_time_t(st.st_mtime);
 	info.device = st.st_dev;
 	info.inode = st.st_ino;
 }
@@ -316,7 +316,7 @@ Copy(StorageFileInfo &info, const struct nfsdirent &ent)
 	}
 
 	info.size = ent.size;
-	info.mtime = ent.mtime.tv_sec;
+	info.mtime = std::chrono::system_clock::from_time_t(ent.mtime.tv_sec);
 	info.device = 0;
 	info.inode = ent.inode;
 }

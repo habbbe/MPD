@@ -25,6 +25,7 @@
 #include "client/Response.hxx"
 #include "LightSong.hxx"
 #include "tag/Tag.hxx"
+#include "TagPrint.hxx"
 
 #include <functional>
 #include <map>
@@ -57,12 +58,12 @@ Print(Response &r, TagType group, const TagCountMap &m)
 	assert(unsigned(group) < TAG_NUM_OF_ITEM_TYPES);
 
 	for (const auto &i : m) {
-		r.Format("%s: %s\n", tag_item_names[group], i.first.c_str());
+		tag_print(r, group, i.first.c_str());
 		PrintSearchStats(r, i.second);
 	}
 }
 
-static bool
+static void
 stats_visitor_song(SearchStats &stats, const LightSong &song)
 {
 	stats.n_songs++;
@@ -70,8 +71,6 @@ stats_visitor_song(SearchStats &stats, const LightSong &song)
 	const auto duration = song.GetDuration();
 	if (!duration.IsNegative())
 		stats.total_duration += duration;
-
-	return true;
 }
 
 static bool
@@ -94,7 +93,7 @@ CollectGroupCounts(TagCountMap &map, TagType group, const Tag &tag)
 	return found;
 }
 
-static bool
+static void
 GroupCountVisitor(TagCountMap &map, TagType group, const LightSong &song)
 {
 	assert(song.tag != nullptr);
@@ -103,8 +102,6 @@ GroupCountVisitor(TagCountMap &map, TagType group, const LightSong &song)
 	if (!CollectGroupCounts(map, group, tag) && group == TAG_ALBUM_ARTIST)
 		/* fall back to "Artist" if no "AlbumArtist" was found */
 		CollectGroupCounts(map, TAG_ARTIST, tag);
-
-	return true;
 }
 
 void

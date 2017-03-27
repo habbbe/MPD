@@ -14,7 +14,7 @@ AM_SILENT_RULES
 AC_CONFIG_HEADERS(config.h)
 AC_CONFIG_MACRO_DIR([m4])
 
-AC_DEFINE(PROTOCOL_VERSION, "0.20.0", [The MPD protocol version])
+AC_DEFINE(PROTOCOL_VERSION, "0.21.0", [The MPD protocol version])
 
 GIT_COMMIT=`GIT_DIR="$srcdir/.git" git describe --dirty --always 2>/dev/null`
 if test x$GIT_COMMIT != x; then
@@ -557,7 +557,7 @@ dnl -------------------------------- libmpdclient ------------------------------
 MPD_ENABLE_AUTO_PKG_DEPENDS(libmpdclient, LIBMPDCLIENT,
 	[libmpdclient >= 2.2],
 	[MPD client library], [libmpdclient not found], [],
-	[enable_database], [Cannot use --enable-libmpdclient with --disable-database])
+	[enable_database], [Database support is disabled])
 
 dnl -------------------------------- expat --------------------------------
 MPD_ENABLE_AUTO_PKG(expat, EXPAT, [expat],
@@ -801,18 +801,14 @@ AM_CONDITIONAL(ENABLE_BZIP2_TEST, test x$BZIP2 != xno)
 
 dnl ---------------------------------- libupnp ---------------------------------
 
-if test x$enable_expat = xno; then
-	if test x$enable_upnp = xauto; then
-		AC_MSG_WARN([expat disabled -- disabling UPnP])
-		enable_upnp=no
-	elif test x$enable_upnp = xyes; then
-		AC_MSG_ERROR([expat disabled -- required for UPnP])
-	fi
-fi
-
 MPD_ENABLE_AUTO_PKG_DEPENDS(upnp, UPNP, [libupnp],
 	[UPnP client support], [libupnp not found], [],
-	[enable_database], [Cannot use --enable-upnp with --disable-database])
+	[enable_database], [Database support is disabled], [
+		MPD_DEPENDS([enable_upnp], [enable_expat],
+			[UPnP client support],
+			[UPnP requires expat])
+	]
+)
 
 dnl --------------------------------- libzzip ---------------------------------
 MPD_ENABLE_AUTO_PKG(zzip, ZZIP, [zziplib >= 0.13],
@@ -1004,7 +1000,7 @@ AM_CONDITIONAL(ENABLE_VORBIS_DECODER, test x$enable_vorbis = xyes || test x$enab
 dnl --------------------------------- sidplay ---------------------------------
 if test x$enable_sidplay != xno; then
 	dnl Check for libsidplayfp first
-	PKG_CHECK_MODULES([SIDPLAY], [libsidplayfp libsidutils],
+	PKG_CHECK_MODULES([SIDPLAY], [libsidplayfp],
 		[found_sidplayfp=yes],
 		[found_sidplayfp=no])
 	found_sidplay=$found_sidplayfp
