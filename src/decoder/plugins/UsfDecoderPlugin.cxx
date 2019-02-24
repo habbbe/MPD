@@ -17,7 +17,6 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#include "config.h"
 #include "UsfDecoderPlugin.hxx"
 #include "../DecoderAPI.hxx"
 #include "tag/Handler.hxx"
@@ -86,8 +85,8 @@ static constexpr struct tag_table usf_tags[] = {
     {nullptr, TAG_NUM_OF_ITEM_TYPES}
 };
 
-struct UsfLengths {
-    unsigned long length = 0; // Track duration.
+struct UsfLength {
+    unsigned long total = 0; // Track duration.
     unsigned long fade = 0;   // Fade out duration
 };
 
@@ -95,16 +94,14 @@ struct UsfLoaderState
 {
     bool enable_compare; // The _enablecompare tag is present in the file; passed to usf_set_compare
     bool enable_fifo_full; // The _enableFIFOfull tag is present in the file; passed to usf_set_fifo_full
-    UsfLengths &lengths;
+    UsfLength length;
     void *emu; // The emulator state
-    UsfLoaderState(UsfLengths &len) : lengths(len) {}
 };
 
 struct UsfTags {
-    UsfLengths &lengths;                  // Song lengths needs to be stored for further calculation
-    const TagHandler &tag_handler; // These two are needed for setting tags when this struct is used
-    void *handler_ctx;                    // as context for tag parsing
-    UsfTags(UsfLengths &lens, const TagHandler &handler) : lengths(lens), tag_handler(handler) {} 
+    UsfLength length;                  // Song length needs to be stored for further calculation
+    TagHandler &tag_handler; // These two are needed for setting tags when this struct is used
+    UsfTags(TagHandler &handler) : tag_handler(handler) {} 
 };
 
 /**
@@ -144,14 +141,14 @@ get_length_from_string(const char *string)
 }
 
 /**
- * Store track lengths by tag
+ * Store track length by tag
  */
 static void
-set_length_from_tags(UsfLengths &lengths, const char *name, const char *value) {
+set_length_from_tags(UsfLength &length, const char *name, const char *value) {
     if (strcmp("length", name) == 0) {
-        lengths.length = get_length_from_string(value);
+        length.total = get_length_from_string(value);
     } else if (strcmp("fade", name) == 0) {
-        lengths.fade = get_length_from_string(value);
+        length.fade = get_length_from_string(value);
     }
 }
 
@@ -159,24 +156,24 @@ static int
 usf_loader(void *context, const uint8_t *exe, size_t exe_size,
                const uint8_t *reserved, size_t reserved_size)
 {
-    struct UsfLoaderState *state = (struct UsfLoaderState *) context;
+    auto &state = *static_cast<UsfLoaderState *>(context);
 
     if (exe && exe_size > 0) return -1;
 
-    return usf_upload_section(state->emu, reserved, reserved_size);
+    return usf_upload_section(state.emu, reserved, reserved_size);
 }
 
 static int
 usf_info(void *context, const char *name, const char *value)
 {
-    struct UsfLoaderState *state = (struct UsfLoaderState *) context;
+    UsfLoaderState &state = *static_cast<UsfLoaderState *>(context);
 
     if (strcmp(name, "_enablecompare") == 0)
-        state->enable_compare = 1;
+        state.enable_compare = 1;
     else if (strcmp(name, "_enableFIFOfull") == 0)
-        state->enable_fifo_full = 1;
+        state.enable_fifo_full = 1;
     else {
-        set_length_from_tags(state->lengths, name, value);
+        set_length_from_tags(state.length, name, value);
     }
     return 0;
 }
@@ -187,13 +184,14 @@ usf_info(void *context, const char *name, const char *value)
 static int
 usf_tags_target(void *context, const char *name, const char *value)
 {
-    struct UsfTags *tag_context = (struct UsfTags *) context;
+    UsfTags &tags = *static_cast<UsfTags *>(context);
 
     TagType type = tag_table_lookup(usf_tags, name);
+
     if (type != TAG_NUM_OF_ITEM_TYPES) {
-        tag_handler_invoke_tag(tag_context->tag_handler, tag_context->handler_ctx, type, value);
+        tags.tag_handler.OnTag(type, value);
     } else {
-        set_length_from_tags(tag_context->lengths, name, value);
+        set_length_from_tags(tags.length, name, value);
     }
     return 0;
 }
@@ -203,16 +201,25 @@ usf_file_decode(DecoderClient &client, Path path_fs)
 {
     /* Load the file */
 
-    UsfLengths lengths;
-    UsfLoaderState state(lengths);
+    UsfLoaderState state;
     state.emu = malloc(usf_get_state_size());
-    usf_clear(state.emu);
     AtScopeExit(&state) {
         free(state.emu);
     };
+    usf_clear(state.emu);
 
     // 0x21 represents the miniusf file format
-    const int psf_version = psf_load(path_fs.c_str(), &stdio_callbacks, 0x21, usf_loader, &state, usf_info, &state, 0);
+    const int psf_version = psf_load(
+            path_fs.c_str(), 
+            &stdio_callbacks, 
+            0x21, 
+            usf_loader, 
+            &state, 
+            usf_info, 
+            &state, 
+            0, 
+            nullptr, 
+            nullptr);
 
     // If psf_version < 0  an error occured while loading the file.
     if (psf_version < 0) {
@@ -232,21 +239,21 @@ usf_file_decode(DecoderClient &client, Path path_fs)
     assert(audio_format.IsValid());
 
     // Duration
-    client.Ready(audio_format, true, SongTime(lengths.length));
+    client.Ready(audio_format, true, SongTime(state.length.total));
 
     /* .. and play */
     DecoderCommand cmd;
 
-    bool loop = lengths.length == 0; // When song has no length, enable looping
+    bool loop = state.length.total == 0; // When song has no length, enable looping
     unsigned long decoded_frames = 0;
     unsigned long total_frames = 0;
     unsigned long fade_frames = 0;
     if (!loop) {
-        total_frames = (lengths.length*sample_rate)/1000;
-        fade_frames = (lengths.fade*sample_rate)/1000;
+        total_frames = (state.length.total*sample_rate)/1000;
+        fade_frames = (state.length.fade*sample_rate)/1000;
     }
     unsigned long fade_start_time = total_frames - fade_frames;
-    bool fade = lengths.fade > 0;
+    bool fade = state.length.fade > 0;
 
     do {
         int16_t buf[USF_BUFFER_SAMPLES];
@@ -285,7 +292,7 @@ usf_file_decode(DecoderClient &client, Path path_fs)
             usf_restart(state.emu);
             usf_render(state.emu, nullptr, frames_to_throw, nullptr);
             client.CommandFinished();
-            client.SubmitTimestamp(target_time);
+            client.SubmitTimestamp(FloatDuration(target_time));
             decoded_frames = frames_to_throw;
         }
 
@@ -294,19 +301,26 @@ usf_file_decode(DecoderClient &client, Path path_fs)
 }
 
 static bool
-usf_scan_file(Path path_fs, const struct TagHandler &handler, void *handler_ctx) 
+usf_scan_file(Path path_fs, TagHandler &handler) 
 {
-    const char* path = path_fs.c_str();
-    UsfLengths lengths;
-    UsfTags tags(lengths, handler);
-    tags.handler_ctx = handler_ctx;
-    const int psf_version = psf_load(path, &stdio_callbacks, 0, 0, 0, usf_tags_target, &tags, 0);
+    UsfTags tags(handler);
+    const int psf_version = psf_load(
+            path_fs.c_str(), 
+            &stdio_callbacks, 
+            0, 
+            nullptr, 
+            nullptr, 
+            usf_tags_target, 
+            &tags, 
+            false, 
+            nullptr, 
+            nullptr);
     if (psf_version < 0) {
         return false;
     }
 
     // Duration
-    tag_handler_invoke_duration(handler, handler_ctx, SongTime::FromMS(lengths.length));
+    handler.OnDuration(SongTime::FromMS(tags.length.total));
     return true;
 }
 
@@ -321,7 +335,7 @@ const struct DecoderPlugin usf_decoder_plugin = {
 	"usf",
 	nullptr,
 	nullptr,
-	nullptr, /* stream_decode() */
+    nullptr,
 	usf_file_decode,
 	usf_scan_file,
 	nullptr, /* stream_tag() */

@@ -105,6 +105,15 @@ if libmodplug_dep.found()
   decoder_plugins_sources += 'ModplugDecoderPlugin.cxx'
 endif
 
+liblazyusf_dep = c_compiler.find_library('lazyusf', required: get_option('lazyusf'))
+conf.set('ENABLE_LAZYUSF', liblazyusf_dep.found())
+if liblazyusf_dep.found()
+  libpsf_dep = c_compiler.find_library('psflib')
+  if libpsf_dep.found() 
+    decoder_plugins_sources += 'UsfDecoderPlugin.cxx'
+  endif
+endif
+
 libmpcdec_dep = c_compiler.find_library('mpcdec', required: get_option('mpcdec'))
 conf.set('ENABLE_MPCDEC', libmpcdec_dep.found())
 if libmpcdec_dep.found()
@@ -173,6 +182,8 @@ decoder_plugins = static_library(
     libaudiofile_dep,
     libfaad_dep,
     libgme_dep,
+    liblazyusf_dep,
+    libpsf_dep,
     libmad_dep,
     libmikmod_dep,
     libmodplug_dep,
