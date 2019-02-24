@@ -17,7 +17,6 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#include "config.h"
 #include "UsfDecoderPlugin.hxx"
 #include "../DecoderAPI.hxx"
 #include "tag/Handler.hxx"
@@ -102,9 +101,9 @@ struct UsfLoaderState
 
 struct UsfTags {
     UsfLengths &lengths;                  // Song lengths needs to be stored for further calculation
-    const TagHandler &tag_handler; // These two are needed for setting tags when this struct is used
+    TagHandler &tag_handler; // These two are needed for setting tags when this struct is used
     void *handler_ctx;                    // as context for tag parsing
-    UsfTags(UsfLengths &lens, const TagHandler &handler) : lengths(lens), tag_handler(handler) {} 
+    UsfTags(UsfLengths &lens, TagHandler &handler) : lengths(lens), tag_handler(handler) {} 
 };
 
 /**
@@ -159,7 +158,7 @@ static int
 usf_loader(void *context, const uint8_t *exe, size_t exe_size,
                const uint8_t *reserved, size_t reserved_size)
 {
-    struct UsfLoaderState *state = (struct UsfLoaderState *) context;
+    UsfLoaderState *state = static_cast<UsfLoaderState *>(context);
 
     if (exe && exe_size > 0) return -1;
 
@@ -169,7 +168,7 @@ usf_loader(void *context, const uint8_t *exe, size_t exe_size,
 static int
 usf_info(void *context, const char *name, const char *value)
 {
-    struct UsfLoaderState *state = (struct UsfLoaderState *) context;
+    UsfLoaderState *state = static_cast<UsfLoaderState *>(context);
 
     if (strcmp(name, "_enablecompare") == 0)
         state->enable_compare = 1;
@@ -187,13 +186,16 @@ usf_info(void *context, const char *name, const char *value)
 static int
 usf_tags_target(void *context, const char *name, const char *value)
 {
-    struct UsfTags *tag_context = (struct UsfTags *) context;
+    UsfTags &tags = *static_cast<UsfTags *>(context);
+
+    TagHandler &handler = tags.tag_handler;
 
     TagType type = tag_table_lookup(usf_tags, name);
+
     if (type != TAG_NUM_OF_ITEM_TYPES) {
-        tag_handler_invoke_tag(tag_context->tag_handler, tag_context->handler_ctx, type, value);
+        handler.OnTag(type, value);
     } else {
-        set_length_from_tags(tag_context->lengths, name, value);
+        set_length_from_tags(tags.lengths, name, value);
     }
     return 0;
 }
@@ -212,7 +214,17 @@ usf_file_decode(DecoderClient &client, Path path_fs)
     };
 
     // 0x21 represents the miniusf file format
-    const int psf_version = psf_load(path_fs.c_str(), &stdio_callbacks, 0x21, usf_loader, &state, usf_info, &state, 0);
+    const int psf_version = psf_load(
+            path_fs.c_str(), 
+            &stdio_callbacks, 
+            0x21, 
+            usf_loader, 
+            &state, 
+            usf_info, 
+            &state, 
+            0, 
+            0, 
+            nullptr);
 
     // If psf_version < 0  an error occured while loading the file.
     if (psf_version < 0) {
@@ -285,7 +297,7 @@ usf_file_decode(DecoderClient &client, Path path_fs)
             usf_restart(state.emu);
             usf_render(state.emu, nullptr, frames_to_throw, nullptr);
             client.CommandFinished();
-            client.SubmitTimestamp(target_time);
+            client.SubmitTimestamp(FloatDuration(target_time));
             decoded_frames = frames_to_throw;
         }
 
@@ -294,19 +306,18 @@ usf_file_decode(DecoderClient &client, Path path_fs)
 }
 
 static bool
-usf_scan_file(Path path_fs, const struct TagHandler &handler, void *handler_ctx) 
+usf_scan_file(Path path_fs, TagHandler &handler) 
 {
-    const char* path = path_fs.c_str();
     UsfLengths lengths;
     UsfTags tags(lengths, handler);
-    tags.handler_ctx = handler_ctx;
-    const int psf_version = psf_load(path, &stdio_callbacks, 0, 0, 0, usf_tags_target, &tags, 0);
+    const int psf_version = psf_load(path_fs.c_str(), &stdio_callbacks, 0, 0, 0, usf_tags_target, &tags, 0, 0, nullptr);
     if (psf_version < 0) {
         return false;
     }
 
     // Duration
-    tag_handler_invoke_duration(handler, handler_ctx, SongTime::FromMS(lengths.length));
+    handler.OnDuration(SongTime::FromMS(lengths.length));
+    //tag_handler_invoke_duration(handler, SongTime::FromMS(lengths.length));
     return true;
 }
 
@@ -321,7 +332,7 @@ const struct DecoderPlugin usf_decoder_plugin = {
 	"usf",
 	nullptr,
 	nullptr,
-	nullptr, /* stream_decode() */
+    nullptr,
 	usf_file_decode,
 	usf_scan_file,
 	nullptr, /* stream_tag() */
