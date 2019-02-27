@@ -18,6 +18,7 @@
  */
 
 #include "UsfDecoderPlugin.hxx"
+#include "CheckAudioFormat.hxx"
 #include "../DecoderAPI.hxx"
 #include "tag/Handler.hxx"
 #include "fs/Path.hxx"
@@ -117,7 +118,7 @@ get_length_from_string(const char *string)
     int acc = 0;           // The accumulating value of the current unit
     for (int i = len - 1; i >= 0; i--) {
         char c = string[i];
-        if (c >= '0' && c <= '9') {
+        if (std::isdigit(c)) {
             acc += (c - '0') * local_mult;
             local_mult *= 10;
         } else {
@@ -235,7 +236,7 @@ usf_file_decode(DecoderClient &client, Path path_fs)
 
     /* initialize the MPD decoder */
 
-    const AudioFormat audio_format(sample_rate, SampleFormat::S16, USF_CHANNELS);
+    const auto audio_format = CheckAudioFormat(sample_rate, SampleFormat::S16, USF_CHANNELS);
     assert(audio_format.IsValid());
 
     // Duration
@@ -286,11 +287,13 @@ usf_file_decode(DecoderClient &client, Path path_fs)
             if (decoded_frames > fade_start_time) {
                 loop = true;
             }
+
             // Seek manually by restarting emulator and discarding samples.
             const int target_time = client.GetSeekTime().ToS();
             const int frames_to_throw = target_time*sample_rate;
             usf_restart(state.emu);
             usf_render(state.emu, nullptr, frames_to_throw, nullptr);
+
             client.CommandFinished();
             client.SubmitTimestamp(FloatDuration(target_time));
             decoded_frames = frames_to_throw;
