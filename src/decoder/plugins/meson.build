@@ -106,12 +106,10 @@ if libmodplug_dep.found()
 endif
 
 liblazyusf_dep = c_compiler.find_library('lazyusf', required: get_option('lazyusf'))
-conf.set('ENABLE_LAZYUSF', liblazyusf_dep.found())
-if liblazyusf_dep.found()
-  libpsf_dep = c_compiler.find_library('psflib')
-  if libpsf_dep.found() 
+libpsf_dep = c_compiler.find_library('psflib')
+conf.set('ENABLE_LAZYUSF', liblazyusf_dep.found() and libpsf_dep.found())
+if liblazyusf_dep.found() and libpsf_dep.found()
     decoder_plugins_sources += 'UsfDecoderPlugin.cxx'
-  endif
 endif
 
 libmpcdec_dep = c_compiler.find_library('mpcdec', required: get_option('mpcdec'))
