@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -37,6 +37,7 @@ public:
 		 output(normal_size, peak_size) {
 	}
 
+	using BufferedSocket::GetEventLoop;
 	using BufferedSocket::IsDefined;
 
 	void Close() noexcept {
@@ -45,6 +46,11 @@ public:
 	}
 
 private:
+	/**
+	 * @return the number of bytes written to the socket, 0 if the
+	 * socket isn't ready for writing, -1 on error (the socket has
+	 * been closed and probably destructed)
+	 */
 	ssize_t DirectWrite(const void *data, size_t length) noexcept;
 
 protected:

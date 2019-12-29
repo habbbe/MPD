@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -39,15 +39,11 @@
 #include "fs/FileSystem.hxx"
 #include "fs/FileInfo.hxx"
 #include "fs/DirectoryReader.hxx"
-#include "util/Macros.hxx"
 #include "util/StringCompare.hxx"
-#include "util/UriUtil.hxx"
-
-#include <memory>
+#include "util/UriExtract.hxx"
 
 #include <assert.h>
 #include <string.h>
-#include <errno.h>
 
 static const char PLAYLIST_COMMENT = '#';
 
@@ -134,7 +130,9 @@ LoadPlaylistFileInfo(PlaylistInfo &info,
 	const auto *const name_fs_end =
 		FindStringSuffix(name_fs_str,
 				 PATH_LITERAL(PLAYLIST_FILE_SUFFIX));
-	if (name_fs_end == nullptr)
+	if (name_fs_end == nullptr ||
+	    /* no empty playlist names (raw file name = ".m3u") */
+	    name_fs_end == name_fs_str)
 		return false;
 
 	FileInfo fi;

@@ -2,23 +2,21 @@ Developer's Manual
 ##################
 
 Introduction
-============
+************
 
 This is a guide for those who wish to hack on the MPD source code.  MPD is an open project, and we are always happy about contributions.  So far, more than 150 people have contributed patches. This document is work in progress.  Most of it may be incomplete yet.  Please help!
 
 Code Style
-==========
+**********
 
 * indent with tabs (width 8)
 * don't write CPP when you can write C++: use inline functions and constexpr instead of macros
 * comment your code, document your APIs
-* the code should be C++14 compliant, and must compile with :program:`GCC` 6.0 and :program:`clang` 3.4
-* report error conditions with C++ exceptions, preferable derived from :envvar:`std::runtime_error`
+* the code should be C++17 compliant, and must compile with :program:`GCC` 7 and :program:`clang` 4
 * all code must be exception-safe
 * classes and functions names use CamelCase; variables are lower-case with words separated by underscore
 
 Some example code:
-~~~~~~~~~~~~~~~~~~
 
 .. code-block:: c
 
@@ -32,8 +30,58 @@ Some example code:
         return xyz;
     }
 
+
+Error handling
+==============
+
+If an error occurs, throw a C++ exception, preferably derived from
+:code:`std::runtime_error`.  The function's API documentation should
+mention that.  If a function cannot throw exceptions, add
+:code:`noexcept` to its prototype.
+
+Some parts of MPD use callbacks to report completion; the handler
+classes usually have an "error" callback which receives a
+:code:`std::exception_ptr`
+(e.g. :code:`BufferedSocket::OnSocketError()`).  Wrapping errors in
+:code:`std::exception_ptr` allows propagating details about the error
+across thread boundaries to the entity which is interested in handling
+it (e.g. giving the MPD client details about an I/O error caught by
+the decoder thread).
+
+Out-of-memory errors (i.e. :code:`std::bad_alloc`) do not need to be
+handled.  Some operating systems such as Linux do not report
+out-of-memory to userspace, and instead kill a process to recover.
+Even if we know we are out of memory, there is little we can do except
+for aborting the process quickly.  Any other attempts to give back
+memory may cause page faults on the way which make the situation
+worse.
+
+Error conditions which are caused by a bug do not need to be handled
+at runtime; instead, use :code:`assert()` to detect them in debug
+builds.
+
+
+git Branches
+************
+
+There are two active branches in the git repository:
+
+- the "unstable" branch called ``master`` where new features are
+  merged.  This will become the next major release eventually.
+- the "stable" branch (currently called ``v0.21.x``) where only bug
+  fixes are merged.
+
+Once :program:`MPD` 0.22 is released, a new branch called ``v0.22.x``
+will be created for 0.22 bug-fix releases; after that, ``v0.21.x``
+will eventually cease to be maintained.
+
+After bug fixes have been added to the "stable" branch, it will be
+merged into ``master``.  This ensures that all known bugs are fixed in
+all active branches.
+
+
 Hacking The Source
-==================
+******************
 
 MPD sources are managed in a git repository on
 `Github <https://github.com/MusicPlayerDaemon/>`_.
@@ -59,7 +107,7 @@ possible, to be sure that you don't break any disabled code.
 Don't mix several changes in one single patch.  Create a separate patch for every change. Tools like :program:`stgit` help you with that. This way, we can review your patches more easily, and we can pick the patches we like most first.
 
 Basic stgit usage
------------------
+=================
 
 stgit allows you to create a set of patches and refine all of them: you can go back to any patch at any time, and re-edit it (both the code and the commit message). You can reorder patches and insert new patches at any position. It encourages creating separate patches for tiny changes.
 
@@ -94,35 +142,7 @@ When the whole patch series is finished, convert stgit patches to git commits:
     stg commit
 
 Submitting Patches
-==================
+******************
 
-Send your patches to the mailing list:
-Email: `mpd-devel <mpd-devel@musicpd.org>`_
-
-:program:`git pull` requests are preferred.
-
-Development Tools
-=================
-
-Clang Static Analyzer
----------------------
-
- The `static analyzer <http://clang-analyzer.llvm.org/>`_ is a tool that helps find bugs. To run it on the MPD code base, install LLVM and clang. configure MPD to use clang:
-
-.. code-block:: sh
-
-    ./configure --enable-debug CXX=clang++ CC=clang ...
-
-It is recommended to use :code:`--enable-debug`, because the analyzer
-takes advantage of :dfn:`assert()` calls, which are only enabled in
-the debug build.
-
-Now run the analyzer:
-
-.. code-block:: sh
-
-    scan-build --use-c++=clang++ --use-cc=clang make
-
-The options :code:`--use-c++` and :code:`--use-cc` are necessary
-because it invokes :command:`cc` for actually compiling the sources by
-default. That breaks, because MPD requires a C99 compiler.
+Submit pull requests on GitHub:
+https://github.com/MusicPlayerDaemon/MPD/pulls

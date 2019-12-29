@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -24,6 +24,8 @@
 #include "Chrono.hxx"
 #include "util/Compiler.h"
 
+template<typename T> struct ConstBuffer;
+struct StringView;
 struct AudioFormat;
 class TagBuilder;
 
@@ -38,6 +40,7 @@ public:
 	static constexpr unsigned WANT_TAG = 0x2;
 	static constexpr unsigned WANT_PAIR = 0x4;
 	static constexpr unsigned WANT_AUDIO_FORMAT = 0x8;
+	static constexpr unsigned WANT_PICTURE = 0x10;
 
 	explicit TagHandler(unsigned _want_mask) noexcept
 		:want_mask(_want_mask) {}
@@ -61,6 +64,10 @@ public:
 		return want_mask & WANT_AUDIO_FORMAT;
 	}
 
+	bool WantPicture() const noexcept {
+		return want_mask & WANT_PICTURE;
+	}
+
 	/**
 	 * Declare the duration of a song.  Do not call
 	 * this when the duration could not be determined, because
@@ -74,13 +81,13 @@ public:
 	 * @param the value of the tag; the pointer will become
 	 * invalid after returning
 	 */
-	virtual void OnTag(TagType type, const char *value) noexcept = 0;
+	virtual void OnTag(TagType type, StringView value) noexcept = 0;
 
 	/**
 	 * A name-value pair has been read.  It is the codec specific
 	 * representation of tags.
 	 */
-	virtual void OnPair(const char *key, const char *value) noexcept = 0;
+	virtual void OnPair(StringView key, StringView value) noexcept = 0;
 
 	/**
 	 * Declare the audio format of a song.
@@ -98,6 +105,18 @@ public:
 	 * too expensive.
 	 */
 	virtual void OnAudioFormat(AudioFormat af) noexcept = 0;
+
+	/**
+	 * A picture has been read.
+	 *
+	 * This method will only be called if #WANT_PICTURE was enabled.
+	 *
+	 * @param mime_type an optional MIME type string
+	 * @param buffer the picture file contents; the buffer will be
+	 * invalidated after this method returns
+	 */
+	virtual void OnPicture(const char *mime_type,
+			       ConstBuffer<void> buffer) noexcept = 0;
 };
 
 class NullTagHandler : public TagHandler {
@@ -106,11 +125,11 @@ public:
 		:TagHandler(_want_mask) {}
 
 	void OnDuration(gcc_unused SongTime duration) noexcept override {}
-	void OnTag(gcc_unused TagType type,
-		   gcc_unused const char *value) noexcept override {}
-	void OnPair(gcc_unused const char *key,
-		    gcc_unused const char *value) noexcept override {}
+	void OnTag(TagType type, StringView value) noexcept override;
+	void OnPair(StringView key, StringView value) noexcept override;
 	void OnAudioFormat(AudioFormat af) noexcept override;
+	void OnPicture(const char *mime_type,
+		       ConstBuffer<void> buffer) noexcept override;
 };
 
 /**
@@ -130,7 +149,7 @@ public:
 		:AddTagHandler(0, _builder) {}
 
 	void OnDuration(SongTime duration) noexcept override;
-	void OnTag(TagType type, const char *value) noexcept override;
+	void OnTag(TagType type, StringView value) noexcept override;
 };
 
 /**
@@ -154,7 +173,7 @@ public:
 				AudioFormat *_audio_format=nullptr) noexcept
 		:FullTagHandler(0, _builder, _audio_format) {}
 
-	void OnPair(const char *key, const char *value) noexcept override;
+	void OnPair(StringView key, StringView value) noexcept override;
 	void OnAudioFormat(AudioFormat af) noexcept override;
 };
 

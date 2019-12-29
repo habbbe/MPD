@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -50,7 +50,7 @@ protected:
 	/* virtual methods from class SocketMonitor */
 	bool OnSocketReady(gcc_unused unsigned flags) noexcept override {
 		DNSServiceProcessResult(service_ref);
-		return false;
+		return true;
 	}
 };
 

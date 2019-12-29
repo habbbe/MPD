@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -29,6 +29,8 @@ ServerSocketAddGeneric(ServerSocket &server_socket, const char *address, unsigne
 		server_socket.AddPort(port);
 	} else if (address[0] == '/' || address[0] == '~') {
 		server_socket.AddPath(ParsePath(address));
+	} else if (address[0] == '@') {
+		server_socket.AddAbstract(address);
 	} else {
 		server_socket.AddHost(address, port);
 	}

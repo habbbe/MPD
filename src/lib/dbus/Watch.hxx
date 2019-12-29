@@ -36,7 +36,6 @@
 #include "Connection.hxx"
 #include "event/SocketMonitor.hxx"
 #include "event/DeferEvent.hxx"
-#include "util/Compiler.h"
 
 #include <dbus/dbus.h>
 
@@ -102,7 +101,7 @@ public:
 
 	void Shutdown() noexcept;
 
-	EventLoop &GetEventLoop() noexcept {
+	auto &GetEventLoop() const noexcept {
 		return defer_dispatch.GetEventLoop();
 	}
 

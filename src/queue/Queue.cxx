@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -150,7 +150,8 @@ Queue::MovePostion(unsigned from, unsigned to) noexcept
 void
 Queue::MoveRange(unsigned start, unsigned end, unsigned to) noexcept
 {
-	Item tmp[end - start];
+	const auto tmp = std::make_unique<Item[]>(end - start);
+
 	// Copy the original block [start,end-1]
 	for (unsigned i = start; i < end; i++)
 		tmp[i - start] = items[i];

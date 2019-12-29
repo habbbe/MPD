@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -94,7 +94,8 @@ SongLoader::LoadSong(const char *uri_utf8) const
 	assert(uri_utf8 != nullptr);
 #endif
 
-	const auto located_uri = LocateUri(uri_utf8, client
+	const auto located_uri = LocateUri(UriPluginKind::INPUT,
+					   uri_utf8, client
 #ifdef ENABLE_DATABASE
 					   , storage
 #endif

@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -21,7 +21,6 @@
 #define MPD_LOCATE_URI_HXX
 
 #include "config.h"
-#include "util/Compiler.h"
 #include "fs/AllocatedPath.hxx"
 
 #ifdef _WIN32
@@ -40,6 +39,12 @@ class Client;
 #ifdef ENABLE_DATABASE
 class Storage;
 #endif
+
+enum class UriPluginKind {
+	INPUT,
+	STORAGE,
+	PLAYLIST,
+};
 
 struct LocatedUri {
 	enum class Type {
@@ -84,7 +89,8 @@ struct LocatedUri {
  * that feature is disabled if this parameter is nullptr
  */
 LocatedUri
-LocateUri(const char *uri, const Client *client
+LocateUri(UriPluginKind kind,
+	  const char *uri, const Client *client
 #ifdef ENABLE_DATABASE
 	  , const Storage *storage
 #endif

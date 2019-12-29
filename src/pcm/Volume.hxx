@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -21,8 +21,8 @@
 #define MPD_PCM_VOLUME_HXX
 
 #include "SampleFormat.hxx"
-#include "PcmBuffer.hxx"
-#include "PcmDither.hxx"
+#include "Buffer.hxx"
+#include "Dither.hxx"
 
 #ifndef NDEBUG
 #include <assert.h>
@@ -38,30 +38,36 @@ static constexpr unsigned PCM_VOLUME_BITS = 10;
 /**
  * This value means "100% volume".
  */
-static constexpr unsigned PCM_VOLUME_1 = 1024;
+static constexpr unsigned PCM_VOLUME_1 = 1u << PCM_VOLUME_BITS;
 static constexpr int PCM_VOLUME_1S = PCM_VOLUME_1;
 
 /**
  * Converts a float value (0.0 = silence, 1.0 = 100% volume) to an
  * integer volume value (1000 = 100%).
  */
-static constexpr inline int
+constexpr int
 pcm_float_to_volume(float volume) noexcept
 {
 	return volume * PCM_VOLUME_1 + 0.5;
 }
 
-static constexpr inline float
+constexpr float
 pcm_volume_to_float(int volume) noexcept
 {
 	return (float)volume / (float)PCM_VOLUME_1;
 }
 
 /**
- * A class that converts samples from one format to another.
+ * Software volume implementation.
  */
 class PcmVolume {
 	SampleFormat format;
+
+	/**
+	 * Are we currently converting to a different #SampleFormat?
+	 * This is set by Open().
+	 */
+	bool convert;
 
 	unsigned volume;
 
@@ -92,11 +98,14 @@ public:
 	/**
 	 * Opens the object, prepare for Apply().
 	 *
-	 * Throws std::runtime_error on error.
+	 * Throws on error.
 	 *
-	 * @param format the sample format
+	 * @param format the input sample format
+	 * @param allow_convert allow the class to convert to a
+	 * different #SampleFormat to preserve quality?
+	 * @return the output sample format
 	 */
-	void Open(SampleFormat format);
+	SampleFormat Open(SampleFormat format, bool allow_convert);
 
 	/**
 	 * Closes the object.  After that, you may call Open() again.

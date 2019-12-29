@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -23,36 +23,31 @@
 #include "db/plugins/simple/Directory.hxx"
 #include "storage/StorageInterface.hxx"
 #include "storage/FileInfo.hxx"
-#include "util/UriUtil.hxx"
 #include "fs/AllocatedPath.hxx"
 #include "fs/FileInfo.hxx"
 #include "tag/Builder.hxx"
 #include "TagFile.hxx"
 #include "TagStream.hxx"
+#include "util/UriExtract.hxx"
 
 #ifdef ENABLE_ARCHIVE
 #include "TagArchive.hxx"
 #endif
-
-#include <exception>
 
 #include <assert.h>
 #include <string.h>
 
 #ifdef ENABLE_DATABASE
 
-Song *
-Song::LoadFile(Storage &storage, const char *path_utf8,
-	       Directory &parent) noexcept
+SongPtr
+Song::LoadFile(Storage &storage, const char *path_utf8, Directory &parent)
 {
 	assert(!uri_has_scheme(path_utf8));
 	assert(strchr(path_utf8, '\n') == nullptr);
 
-	Song *song = NewFile(path_utf8, parent);
-	if (!song->UpdateFile(storage)) {
-		song->Free();
+	auto song = std::make_unique<Song>(path_utf8, parent);
+	if (!song->UpdateFile(storage))
 		return nullptr;
-	}
 
 	return song;
 }
@@ -62,17 +57,11 @@ Song::LoadFile(Storage &storage, const char *path_utf8,
 #ifdef ENABLE_DATABASE
 
 bool
-Song::UpdateFile(Storage &storage) noexcept
+Song::UpdateFile(Storage &storage)
 {
 	const auto &relative_uri = GetURI();
 
-	StorageFileInfo info;
-	try {
-		info = storage.GetInfo(relative_uri.c_str(), true);
-	} catch (...) {
-		return false;
-	}
-
+	const auto info = storage.GetInfo(relative_uri.c_str(), true);
 	if (!info.IsRegular())
 		return false;
 
@@ -98,23 +87,18 @@ Song::UpdateFile(Storage &storage) noexcept
 	return true;
 }
 
-#endif
-
 #ifdef ENABLE_ARCHIVE
 
-Song *
+SongPtr
 Song::LoadFromArchive(ArchiveFile &archive, const char *name_utf8,
 		      Directory &parent) noexcept
 {
 	assert(!uri_has_scheme(name_utf8));
 	assert(strchr(name_utf8, '\n') == nullptr);
 
-	Song *song = NewFile(name_utf8, parent);
-
-	if (!song->UpdateFileInArchive(archive)) {
-		song->Free();
+	auto song = std::make_unique<Song>(name_utf8, parent);
+	if (!song->UpdateFileInArchive(archive))
 		return nullptr;
-	}
 
 	return song;
 }
@@ -122,12 +106,11 @@ Song::LoadFromArchive(ArchiveFile &archive, const char *name_utf8,
 bool
 Song::UpdateFileInArchive(ArchiveFile &archive) noexcept
 {
-	assert(parent != nullptr);
-	assert(parent->device == DEVICE_INARCHIVE);
+	assert(parent.device == DEVICE_INARCHIVE);
 
-	std::string path_utf8(uri);
+	std::string path_utf8(filename);
 
-	for (const Directory *directory = parent;
+	for (const Directory *directory = &parent;
 	     directory->parent != nullptr &&
 		     directory->parent->device == DEVICE_INARCHIVE;
 	     directory = directory->parent) {
@@ -145,11 +128,13 @@ Song::UpdateFileInArchive(ArchiveFile &archive) noexcept
 
 #endif
 
+#endif /* ENABLE_DATABASE */
+
 bool
-DetachedSong::LoadFile(Path path) noexcept
+DetachedSong::LoadFile(Path path)
 {
-	FileInfo fi;
-	if (!GetFileInfo(path, fi) || !fi.IsRegular())
+	const FileInfo fi(path);
+	if (!fi.IsRegular())
 		return false;
 
 	TagBuilder tag_builder;
@@ -162,13 +147,11 @@ DetachedSong::LoadFile(Path path) noexcept
 }
 
 bool
-DetachedSong::Update() noexcept
+DetachedSong::Update()
 {
 	if (IsAbsoluteFile()) {
 		const AllocatedPath path_fs =
-			AllocatedPath::FromUTF8(GetRealURI());
-		if (path_fs.IsNull())
-			return false;
+			AllocatedPath::FromUTF8Throw(GetRealURI());
 
 		return LoadFile(path_fs);
 	} else if (IsRemote()) {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -90,7 +90,7 @@ public:
 	void AddHost(const char *hostname, unsigned port);
 
 	/**
-	 * Add a listener on a Unix domain socket.
+	 * Add a listener on a local socket.
 	 *
 	 * Throws #std::runtime_error on error.
 	 *
@@ -98,6 +98,16 @@ public:
 	 * @param error location to store the error occurring
 	 */
 	void AddPath(AllocatedPath &&path);
+
+	/**
+	 * Add a listener on an abstract local socket (Linux specific).
+	 *
+	 * Throws on error.
+	 *
+	 * @param name the abstract socket name, starting with a '@'
+	 * instead of a null byte
+	 */
+	void AddAbstract(const char *name);
 
 	/**
 	 * Add a socket descriptor that is accepting connections.  After this

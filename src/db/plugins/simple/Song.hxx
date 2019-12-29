@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -20,6 +20,7 @@
 #ifndef MPD_SONG_HXX
 #define MPD_SONG_HXX
 
+#include "Ptr.hxx"
 #include "Chrono.hxx"
 #include "tag/Tag.hxx"
 #include "AudioFormat.hxx"
@@ -30,8 +31,7 @@
 
 #include <string>
 
-#include <time.h>
-
+struct StringView;
 struct LightSong;
 struct Directory;
 class DetachedSong;
@@ -47,12 +47,6 @@ struct Song {
 	typedef boost::intrusive::link_mode<link_mode> LinkMode;
 	typedef boost::intrusive::list_member_hook<LinkMode> Hook;
 
-	struct Disposer {
-		void operator()(Song *song) const {
-			song->Free();
-		}
-	};
-
 	/**
 	 * Pointers to the siblings of this directory within the
 	 * parent directory.  It is unused (undefined) if this song is
@@ -66,10 +60,9 @@ struct Song {
 	Tag tag;
 
 	/**
-	 * The #Directory that contains this song.  Must be
-	 * non-nullptr.
+	 * The #Directory that contains this song.
 	 */
-	Directory *const parent;
+	Directory &parent;
 
 	/**
 	 * The time stamp of the last file modification.  A negative
@@ -98,35 +91,47 @@ struct Song {
 	/**
 	 * The file name.
 	 */
-	char uri[sizeof(int)];
+	std::string filename;
 
-	Song(const char *_uri, size_t uri_length, Directory &parent);
-	~Song();
+	/**
+	 * If non-empty, then this object does not describe a file
+	 * within the `music_directory`, but some sort of symbolic
+	 * link pointing to this value.  It can be an absolute URI
+	 * (i.e. with URI scheme) or a URI relative to this object
+	 * (which may begin with one or more "../").
+	 */
+	std::string target;
 
-	gcc_malloc gcc_returns_nonnull
-	static Song *NewFrom(DetachedSong &&other, Directory &parent);
+	template<typename F>
+	Song(F &&_filename, Directory &_parent) noexcept
+		:parent(_parent), filename(std::forward<F>(_filename)) {}
 
-	/** allocate a new song with a local file name */
-	gcc_malloc gcc_returns_nonnull
-	static Song *NewFile(const char *path_utf8, Directory &parent);
+	Song(DetachedSong &&other, Directory &_parent) noexcept;
 
 	/**
 	 * allocate a new song structure with a local file name and attempt to
 	 * load its metadata.  If all decoder plugin fail to read its meta
 	 * data, nullptr is returned.
+	 *
+	 * Throws on error.
+	 *
+	 * @return the song on success, nullptr if the file was not
+	 * recognized
 	 */
-	gcc_malloc
-	static Song *LoadFile(Storage &storage, const char *name_utf8,
-			      Directory &parent) noexcept;
+	static SongPtr LoadFile(Storage &storage, const char *name_utf8,
+				Directory &parent);
 
-	void Free();
-
-	bool UpdateFile(Storage &storage) noexcept;
+	/**
+	 * Throws on error.
+	 *
+	 * @return true on success, false if the file was not recognized
+	 */
+	bool UpdateFile(Storage &storage);
 
 #ifdef ENABLE_ARCHIVE
-	static Song *LoadFromArchive(ArchiveFile &archive,
-				     const char *name_utf8,
-				     Directory &parent) noexcept;
+	static SongPtr LoadFromArchive(ArchiveFile &archive,
+				       const char *name_utf8,
+				       Directory &parent) noexcept;
 	bool UpdateFileInArchive(ArchiveFile &archive) noexcept;
 #endif
 

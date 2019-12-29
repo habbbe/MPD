@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -22,12 +22,14 @@
 #include "client/Client.hxx"
 #include "fs/AllocatedPath.hxx"
 #include "ls.hxx"
-#include "util/UriUtil.hxx"
 #include "util/ASCII.hxx"
+#include "util/UriExtract.hxx"
 
 #ifdef ENABLE_DATABASE
 #include "storage/StorageInterface.hxx"
 #endif
+
+#include <stdexcept>
 
 static LocatedUri
 LocateFileUri(const char *uri, const Client *client
@@ -55,14 +57,26 @@ LocateFileUri(const char *uri, const Client *client
 }
 
 static LocatedUri
-LocateAbsoluteUri(const char *uri
+LocateAbsoluteUri(UriPluginKind kind, const char *uri
 #ifdef ENABLE_DATABASE
 		  , const Storage *storage
 #endif
 		  )
 {
-	if (!uri_supported_scheme(uri))
-		throw std::runtime_error("Unsupported URI scheme");
+	switch (kind) {
+	case UriPluginKind::INPUT:
+	case UriPluginKind::STORAGE: // TODO: separate check for storage plugins
+		if (!uri_supported_scheme(uri))
+			throw std::runtime_error("Unsupported URI scheme");
+		break;
+
+	case UriPluginKind::PLAYLIST:
+		/* for now, no validation for playlist URIs; this is
+		   more complicated because there are three ways to
+		   identify which plugin to use: URI scheme, filename
+		   suffix and MIME type */
+		break;
+	}
 
 #ifdef ENABLE_DATABASE
 	if (storage != nullptr) {
@@ -76,7 +90,8 @@ LocateAbsoluteUri(const char *uri
 }
 
 LocatedUri
-LocateUri(const char *uri, const Client *client
+LocateUri(UriPluginKind kind,
+	  const char *uri, const Client *client
 #ifdef ENABLE_DATABASE
 	  , const Storage *storage
 #endif
@@ -100,7 +115,7 @@ LocateUri(const char *uri, const Client *client
 #endif
 				     );
 	else if (uri_has_scheme(uri))
-		return LocateAbsoluteUri(uri
+		return LocateAbsoluteUri(kind, uri
 #ifdef ENABLE_DATABASE
 					 , storage
 #endif

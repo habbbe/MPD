@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -52,13 +52,13 @@ EventThread::Run() noexcept
 	SetThreadName(realtime ? "rtio" : "io");
 
 	if (realtime) {
-		SetThreadTimerSlackUS(10);
+		SetThreadTimerSlack(std::chrono::microseconds(10));
 
 		try {
 			SetThreadRealtime();
 		} catch (...) {
-			LogError(std::current_exception(),
-				 "RTIOThread could not get realtime scheduling, continuing anyway");
+			Log(LogLevel::INFO, std::current_exception(),
+			    "RTIOThread could not get realtime scheduling, continuing anyway");
 		}
 	}
 

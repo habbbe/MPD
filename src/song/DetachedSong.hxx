@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -234,14 +234,18 @@ public:
 	/**
 	 * Update the #tag and #mtime.
 	 *
+	 * Throws on error.
+	 *
 	 * @return true on success
 	 */
-	bool Update() noexcept;
+	bool Update();
 
 	/**
 	 * Load #tag and #mtime from a local file.
+	 *
+	 * Throws on error.
 	 */
-	bool LoadFile(Path path) noexcept;
+	bool LoadFile(Path path);
 };
 
 #endif

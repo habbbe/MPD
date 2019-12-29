@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -29,7 +29,8 @@
 #include "fs/FileSystem.hxx"
 #include "util/ScopeExit.hxx"
 #include "util/StringFormat.hxx"
-#include "util/UriUtil.hxx"
+#include "util/StringView.hxx"
+#include "util/UriExtract.hxx"
 #include "util/Domain.hxx"
 #include "Log.hxx"
 
@@ -220,7 +221,7 @@ ScanGmeInfo(const gme_info_t &info, unsigned song_num, int track_count,
 		handler.OnDuration(SongTime::FromMS(info.play_length));
 
 	if (track_count > 1)
-		handler.OnTag(TAG_TRACK, StringFormat<16>("%u", song_num + 1));
+		handler.OnTag(TAG_TRACK, StringFormat<16>("%u", song_num + 1).c_str());
 
 	if (info.song != nullptr) {
 		if (track_count > 1) {
@@ -229,7 +230,7 @@ ScanGmeInfo(const gme_info_t &info, unsigned song_num, int track_count,
 				StringFormat<1024>("%s (%u/%d)",
 						   info.song, song_num + 1,
 						   track_count);
-			handler.OnTag(TAG_TITLE, tag_title);
+			handler.OnTag(TAG_TITLE, tag_title.c_str());
 		} else
 			handler.OnTag(TAG_TITLE, info.song);
 	}
@@ -323,15 +324,8 @@ static const char *const gme_suffixes[] = {
 	nullptr
 };
 
-const struct DecoderPlugin gme_decoder_plugin = {
-	"gme",
-	gme_plugin_init,
-	nullptr,
-	nullptr,
-	gme_file_decode,
-	gme_scan_file,
-	nullptr,
-	gme_container_scan,
-	gme_suffixes,
-	nullptr,
-};
+constexpr DecoderPlugin gme_decoder_plugin =
+	DecoderPlugin("gme", gme_file_decode, gme_scan_file)
+	.WithInit(gme_plugin_init)
+	.WithContainer(gme_container_scan)
+	.WithSuffixes(gme_suffixes);

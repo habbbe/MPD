@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -59,12 +59,8 @@ public:
 
 private:
 	bool LockWaitFinished() noexcept {
-		const std::lock_guard<Mutex> protect(mutex);
-		while (!finished)
-			if (!cond.timed_wait(mutex, timeout))
-				return false;
-
-		return true;
+		std::unique_lock<Mutex> lock(mutex);
+		return cond.wait_for(lock, timeout, [this]{ return finished; });
 	}
 
 	/**
@@ -74,7 +70,7 @@ private:
 	void LockSetFinished() noexcept {
 		const std::lock_guard<Mutex> protect(mutex);
 		finished = true;
-		cond.signal();
+		cond.notify_one();
 	}
 
 	/* virtual methods from NfsLease */

@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -20,11 +20,26 @@
 #ifndef MPD_SQLITE_UTIL_HXX
 #define MPD_SQLITE_UTIL_HXX
 
+#include "util/Compiler.h"
 #include "Error.hxx"
 
 #include <sqlite3.h>
 
 #include <assert.h>
+
+namespace Sqlite {
+
+static inline sqlite3_stmt *
+Prepare(sqlite3 *db, const char *sql)
+{
+	sqlite3_stmt *stmt;
+	int ret = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+	if (ret != SQLITE_OK)
+		throw SqliteError(db, ret,
+				  "sqlite3_prepare_v2() failed");
+
+	return stmt;
+}
 
 /**
  * Throws #SqliteError on error.
@@ -157,5 +172,7 @@ ExecuteForEach(sqlite3_stmt *stmt, F &&f)
 		}
 	}
 }
+
+} // namespace Sqlite
 
 #endif

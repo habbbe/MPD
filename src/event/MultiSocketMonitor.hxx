@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -23,7 +23,6 @@
 #include "IdleMonitor.hxx"
 #include "TimerEvent.hxx"
 #include "SocketMonitor.hxx"
-#include "util/Compiler.h"
 
 #include <forward_list>
 #include <iterator>
@@ -50,12 +49,10 @@ class MultiSocketMonitor : IdleMonitor
 		unsigned revents;
 
 	public:
-		SingleFD(MultiSocketMonitor &_multi, SocketDescriptor _fd,
-			 unsigned events) noexcept
+		SingleFD(MultiSocketMonitor &_multi,
+			 SocketDescriptor _fd) noexcept
 			:SocketMonitor(_fd, _multi.GetEventLoop()),
-			multi(_multi), revents(0) {
-			Schedule(events);
-		}
+			multi(_multi), revents(0) {}
 
 		SocketDescriptor GetSocket() const noexcept {
 			return SocketMonitor::GetSocket();
@@ -86,8 +83,6 @@ class MultiSocketMonitor : IdleMonitor
 		}
 	};
 
-	friend class SingleFD;
-
 	TimerEvent timeout_event;
 
 	/**
@@ -105,6 +100,21 @@ class MultiSocketMonitor : IdleMonitor
 	bool refresh;
 
 	std::forward_list<SingleFD> fds;
+
+#ifdef USE_EPOLL
+	struct AlwaysReady {
+		const SocketDescriptor fd;
+		const unsigned revents;
+	};
+
+	/**
+	 * A list of file descriptors which are always ready.  This is
+	 * a kludge needed because the ALSA output plugin gives us a
+	 * file descriptor to /dev/null, which is incompatible with
+	 * epoll (epoll_ctl() returns -EPERM).
+	 */
+	std::forward_list<AlwaysReady> always_ready_fds;
+#endif
 
 public:
 	static constexpr unsigned READ = SocketMonitor::READ;
@@ -147,9 +157,7 @@ public:
 	 *
 	 * May only be called from PrepareSockets().
 	 */
-	void AddSocket(SocketDescriptor fd, unsigned events) noexcept {
-		fds.emplace_front(*this, fd, events);
-	}
+	bool AddSocket(SocketDescriptor fd, unsigned events) noexcept;
 
 	/**
 	 * Remove all sockets.
@@ -204,6 +212,11 @@ public:
 				i.ClearReturnedEvents();
 			}
 		}
+
+#ifdef USE_EPOLL
+		for (const auto &i : always_ready_fds)
+			f(i.fd, i.revents);
+#endif
 	}
 
 protected:
@@ -232,7 +245,6 @@ private:
 
 	void OnTimeout() noexcept {
 		SetReady();
-		IdleMonitor::Schedule();
 	}
 
 	virtual void OnIdle() noexcept final;

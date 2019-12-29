@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -23,7 +23,6 @@
 #include "net/IPv6Address.hxx"
 #include "net/StaticSocketAddress.hxx"
 #include "net/AllocatedSocketAddress.hxx"
-#include "net/SocketAddress.hxx"
 #include "net/SocketUtil.hxx"
 #include "net/SocketError.hxx"
 #include "net/UniqueSocketDescriptor.hxx"
@@ -37,7 +36,7 @@
 #include "Log.hxx"
 
 #include <string>
-#include <algorithm>
+#include <utility>
 
 #include <assert.h>
 
@@ -392,7 +391,29 @@ ServerSocket::AddPath(AllocatedPath &&path)
 #else /* !HAVE_UN */
 	(void)path;
 
-	throw std::runtime_error("UNIX domain socket support is disabled");
+	throw std::runtime_error("Local socket support is disabled");
 #endif /* !HAVE_UN */
 }
 
+
+void
+ServerSocket::AddAbstract(const char *name)
+{
+#if !defined(__linux__)
+	(void)name;
+
+	throw std::runtime_error("Abstract sockets are only available on Linux");
+#elif !defined(HAVE_UN)
+	(void)name;
+
+	throw std::runtime_error("Local socket support is disabled");
+#else
+	assert(name != nullptr);
+	assert(*name == '@');
+
+	AllocatedSocketAddress address;
+	address.SetLocal(name);
+
+	AddAddress(std::move(address));
+#endif
+}

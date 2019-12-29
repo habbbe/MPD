@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -27,8 +27,6 @@
 #include "input/InputStream.hxx"
 #include "input/LocalOpen.hxx"
 
-#include <exception>
-
 #include <assert.h>
 
 class TagFileScan {
@@ -51,36 +49,29 @@ public:
 		return plugin.ScanFile(path_fs, handler);
 	}
 
-	bool ScanStream(const DecoderPlugin &plugin) noexcept {
+	bool ScanStream(const DecoderPlugin &plugin) {
 		if (plugin.scan_stream == nullptr)
 			return false;
 
 		/* open the InputStream (if not already open) */
 		if (is == nullptr) {
-			try {
-				is = OpenLocalInputStream(path_fs, mutex);
-			} catch (...) {
-				return false;
-			}
+			is = OpenLocalInputStream(path_fs, mutex);
 		} else {
-			try {
-				is->LockRewind();
-			} catch (...) {
-			}
+			is->LockRewind();
 		}
 
 		/* now try the stream_tag() method */
 		return plugin.ScanStream(*is, handler);
 	}
 
-	bool Scan(const DecoderPlugin &plugin) noexcept {
+	bool Scan(const DecoderPlugin &plugin) {
 		return plugin.SupportsSuffix(suffix) &&
 			(ScanFile(plugin) || ScanStream(plugin));
 	}
 };
 
 bool
-ScanFileTagsNoGeneric(Path path_fs, TagHandler &handler) noexcept
+ScanFileTagsNoGeneric(Path path_fs, TagHandler &handler)
 {
 	assert(!path_fs.IsNull());
 
@@ -100,7 +91,7 @@ ScanFileTagsNoGeneric(Path path_fs, TagHandler &handler) noexcept
 
 bool
 ScanFileTagsWithGeneric(Path path, TagBuilder &builder,
-			AudioFormat *audio_format) noexcept
+			AudioFormat *audio_format)
 {
 	FullTagHandler h(builder, audio_format);
 

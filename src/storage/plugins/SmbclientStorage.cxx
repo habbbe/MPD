@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -59,9 +59,8 @@ public:
 		:base(_base), ctx(_ctx) {}
 
 	virtual ~SmbclientStorage() {
-		smbclient_mutex.lock();
+		const std::lock_guard<Mutex> lock(smbclient_mutex);
 		smbc_free_context(ctx, 1);
-		smbclient_mutex.unlock();
 	}
 
 	/* virtual methods from class Storage */
@@ -153,9 +152,8 @@ SkipNameFS(const char *name) noexcept
 
 SmbclientDirectoryReader::~SmbclientDirectoryReader()
 {
-	smbclient_mutex.lock();
+	const std::lock_guard<Mutex> lock(smbclient_mutex);
 	smbc_close(handle);
-	smbclient_mutex.unlock();
 }
 
 const char *

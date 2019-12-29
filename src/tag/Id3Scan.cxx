@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -27,11 +27,11 @@
 #include "util/Alloc.hxx"
 #include "util/ScopeExit.hxx"
 #include "util/StringStrip.hxx"
+#include "util/StringView.hxx"
 #include "Log.hxx"
 
 #include <id3tag.h>
 
-#include <string>
 #include <exception>
 
 #include <string.h>
@@ -281,8 +281,49 @@ tag_id3_import_ufid(const struct id3_tag *id3_tag,
 		if (value == nullptr || length == 0)
 			continue;
 
-		std::string p((const char *)value, length);
-		handler.OnTag(TAG_MUSICBRAINZ_TRACKID, p.c_str());
+		handler.OnTag(TAG_MUSICBRAINZ_TRACKID,
+			      {(const char *)value, length});
+	}
+}
+
+/**
+ * Handle "APIC" ("attached picture") tags.
+ */
+static void
+tag_id3_handle_apic(const struct id3_tag *id3_tag,
+		    TagHandler &handler) noexcept
+{
+	if (!handler.WantPicture())
+		return;
+
+	for (unsigned i = 0;; ++i) {
+		const id3_frame *frame = id3_tag_findframe(id3_tag, "APIC", i);
+		if (frame == nullptr)
+			break;
+
+		id3_field *mime_type_field = id3_frame_field(frame, 1);
+		if (mime_type_field == nullptr)
+			continue;
+
+		const char *mime_type = (const char *)
+			id3_field_getlatin1(mime_type_field);
+		if (mime_type != nullptr &&
+		    StringIsEqual(mime_type, "-->"))
+			/* this is a URL, not image data */
+			continue;
+
+		id3_field *data_field = id3_frame_field(frame, 4);
+		if (data_field == nullptr ||
+		    data_field->type != ID3_FIELD_TYPE_BINARYDATA)
+			continue;
+
+		id3_length_t size;
+		const id3_byte_t *data =
+			id3_field_getbinarydata(data_field, &size);
+		if (data == nullptr || size == 0)
+			continue;
+
+		handler.OnPicture(mime_type, {data, size});
 	}
 }
 
@@ -317,6 +358,7 @@ scan_id3_tag(const struct id3_tag *tag, TagHandler &handler) noexcept
 	tag_id3_import_text(tag, "TPE3", TAG_PERFORMER,
 			    handler);
 	tag_id3_import_text(tag, "TPE4", TAG_PERFORMER, handler);
+	tag_id3_import_text(tag, "TIT1", TAG_GROUPING, handler);
 	tag_id3_import_comment(tag, ID3_FRAME_COMMENT, TAG_COMMENT,
 			       handler);
 	tag_id3_import_text(tag, ID3_FRAME_DISC, TAG_DISC,
@@ -326,6 +368,7 @@ scan_id3_tag(const struct id3_tag *tag, TagHandler &handler) noexcept
 
 	tag_id3_import_musicbrainz(tag, handler);
 	tag_id3_import_ufid(tag, handler);
+	tag_id3_handle_apic(tag, handler);
 }
 
 Tag

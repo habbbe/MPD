@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -175,7 +175,7 @@ public:
 	/**
 	 * Caller must lock the mutex.
 	 *
-	 * Throws #std::runtime_error on error.
+	 * Throws on error.
 	 */
 	void OpenEncoder(AudioFormat &audio_format);
 
@@ -208,10 +208,15 @@ public:
 		return HasClients();
 	}
 
+	/**
+	 * Caller must lock the mutex.
+	 */
 	void AddClient(UniqueSocketDescriptor fd) noexcept;
 
 	/**
 	 * Removes a client from the httpd_output.clients linked list.
+	 *
+	 * Caller must lock the mutex.
 	 */
 	void RemoveClient(HttpdClient &client) noexcept;
 
@@ -239,11 +244,15 @@ public:
 
 	/**
 	 * Broadcasts data from the encoder to all clients.
+	 *
+	 * Mutext must not be locked.
 	 */
 	void BroadcastFromEncoder();
 
 	/**
-	 * Throws #std::runtime_error on error.
+	 * Mutext must not be locked.
+	 *
+	 * Throws on error.
 	 */
 	void EncodeAndPlay(const void *chunk, size_t size);
 
@@ -251,6 +260,9 @@ public:
 
 	size_t Play(const void *chunk, size_t size) override;
 
+	/**
+	 * Mutext must not be locked.
+	 */
 	void CancelAllClients() noexcept;
 
 	void Cancel() noexcept override;

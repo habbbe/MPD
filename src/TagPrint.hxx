@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -25,10 +25,14 @@
 enum TagType : uint8_t;
 
 struct Tag;
+struct StringView;
 class Response;
 
 void
 tag_print_types(Response &response) noexcept;
+
+void
+tag_print(Response &response, TagType type, StringView value) noexcept;
 
 void
 tag_print(Response &response, TagType type, const char *value) noexcept;

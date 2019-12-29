@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -28,7 +28,7 @@ class ClientListener final : public ServerSocket {
 	Partition &partition;
 
 public:
-	ClientListener(EventLoop &_loop, Partition &_partition)
+	ClientListener(EventLoop &_loop, Partition &_partition) noexcept
 		:ServerSocket(_loop), partition(_partition) {}
 
 private:

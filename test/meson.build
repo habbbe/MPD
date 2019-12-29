@@ -21,16 +21,6 @@ gtest_dep = declare_dependency(
 subdir('net')
 
 executable(
-  'ParseSongFilter',
-  'ParseSongFilter.cxx',
-  include_directories: inc,
-  dependencies: [
-    song_dep,
-    pcm_dep,
-  ],
-)
-
-executable(
   'read_conf',
   'read_conf.cxx',
   '../src/Log.cxx',
@@ -47,6 +37,9 @@ test('TestUtil', executable(
   'TestDivideString.cxx',
   'TestMimeType.cxx',
   'TestSplitString.cxx',
+  'TestUriExtract.cxx',
+  'TestUriQueryParser.cxx',
+  'TestUriRelative.cxx',
   'TestUriUtil.cxx',
   'test_byte_reverse.cxx',
   include_directories: inc,
@@ -56,9 +49,24 @@ test('TestUtil', executable(
   ],
 ))
 
+test(
+  'TestTime',
+  executable(
+    'TestTime',
+    'TestISO8601.cxx',
+    include_directories: inc,
+    dependencies: [
+      time_dep,
+      gtest_dep,
+    ],
+  ),
+)
+
 test('TestRewindInputStream', executable(
   'TestRewindInputStream',
   'TestRewindInputStream.cxx',
+  '../src/Log.cxx',
+  '../src/LogBackend.cxx',
   include_directories: inc,
   dependencies: [
     input_glue_dep,
@@ -102,6 +110,9 @@ test('test_queue_priority', executable(
 test('TestFs', executable(
   'TestFs',
   'TestFs.cxx',
+  'TestLookupFile.cxx',
+  '../src/Log.cxx',
+  '../src/LogBackend.cxx',
   include_directories: inc,
   dependencies: [
     fs_dep,
@@ -212,6 +223,33 @@ if zlib_dep.found()
 endif
 
 #
+# Filter
+#
+
+executable(
+  'ParseSongFilter',
+  'ParseSongFilter.cxx',
+  include_directories: inc,
+  dependencies: [
+    song_dep,
+    pcm_dep,
+  ],
+)
+
+test(
+  'TestSongFilter',
+  executable(
+    'TestSongFilter',
+    'TestTagSongFilter.cxx',
+    include_directories: inc,
+    dependencies: [
+      song_dep,
+      gtest_dep,
+    ],
+  )
+)
+
+#
 # Neighbor
 #
 
@@ -304,6 +342,18 @@ executable(
 )
 
 if curl_dep.found()
+  executable(
+    'RunCurl',
+    'RunCurl.cxx',
+    'ShutdownHandler.cxx',
+    '../src/Log.cxx',
+    '../src/LogBackend.cxx',
+    include_directories: inc,
+    dependencies: [
+      curl_dep,
+    ],
+  )
+
   test('test_icy_parser', executable(
     'test_icy_parser',
     'test_icy_parser.cxx',
@@ -311,6 +361,7 @@ if curl_dep.found()
     '../src/LogBackend.cxx',
     include_directories: inc,
     dependencies: [
+      icu_dep,
       tag_dep,
       gtest_dep,
     ],
@@ -322,18 +373,6 @@ endif
 #
 
 if archive_glue_dep.found()
-  test('test_archive', executable(
-    'test_archive',
-    'test_archive.cxx',
-    '../src/Log.cxx',
-    '../src/LogBackend.cxx',
-    include_directories: inc,
-    dependencies: [
-      archive_glue_dep,
-      gtest_dep,
-    ],
-  ))
-
   executable(
     'visit_archive',
     'visit_archive.cxx',
@@ -392,6 +431,7 @@ if chromaprint_dep.found()
   executable(
     'RunChromaprint',
     'RunChromaprint.cxx',
+    '../src/lib/chromaprint/DecoderClient.cxx',
     '../src/Log.cxx',
     '../src/LogBackend.cxx',
     include_directories: inc,

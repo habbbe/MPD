@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -21,16 +21,14 @@
 #define MPD_AUDIO_FORMAT_HXX
 
 #include "pcm/SampleFormat.hxx"
+#include "pcm/ChannelDefs.hxx"
 #include "util/Compiler.h"
 
-#include <chrono>
+#include <cstdint>
 
-#include <stdint.h>
 #include <stddef.h>
 
 template<size_t CAPACITY> class StringBuffer;
-
-static constexpr unsigned MAX_CHANNELS = 8;
 
 /**
  * This structure describes the format of a raw PCM stream.
@@ -178,19 +176,10 @@ struct AudioFormat {
  *
  * @param sample_rate the sample rate in Hz
  */
-static constexpr inline bool
-audio_valid_sample_rate(unsigned sample_rate)
+constexpr bool
+audio_valid_sample_rate(unsigned sample_rate) noexcept
 {
 	return sample_rate > 0 && sample_rate < (1 << 30);
-}
-
-/**
- * Checks whether the number of channels is valid.
- */
-static constexpr inline bool
-audio_valid_channel_count(unsigned channels)
-{
-	return channels >= 1 && channels <= MAX_CHANNELS;
 }
 
 /**

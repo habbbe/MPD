@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -24,20 +24,18 @@
 #include "db/DatabasePrint.hxx"
 #include "db/Count.hxx"
 #include "db/Selection.hxx"
-#include "CommandError.hxx"
 #include "protocol/RangeArg.hxx"
 #include "client/Client.hxx"
 #include "client/Response.hxx"
 #include "tag/ParseName.hxx"
-#include "tag/Mask.hxx"
 #include "util/ConstBuffer.hxx"
 #include "util/Exception.hxx"
 #include "util/StringAPI.hxx"
 #include "util/ASCII.hxx"
 #include "song/Filter.hxx"
-#include "BulkEdit.hxx"
 
 #include <memory>
+#include <vector>
 
 CommandResult
 handle_listfiles_db(Client &client, Response &r, const char *uri)
@@ -70,8 +68,13 @@ ParseSortTag(const char *s)
 	return tag;
 }
 
-static CommandResult
-handle_match(Client &client, Request args, Response &r, bool fold_case)
+/**
+ * Convert all remaining arguments to a #DatabaseSelection.
+ *
+ * @param filter a buffer to be used for DatabaseSelection::filter
+ */
+static DatabaseSelection
+ParseDatabaseSelection(Request args, bool fold_case, SongFilter &filter)
 {
 	RangeArg window = RangeArg::All();
 	if (args.size >= 2 && StringIsEqual(args[args.size - 2], "window")) {
@@ -96,13 +99,11 @@ handle_match(Client &client, Request args, Response &r, bool fold_case)
 		args.pop_back();
 	}
 
-	SongFilter filter;
 	try {
 		filter.Parse(args, fold_case);
 	} catch (...) {
-		r.Error(ACK_ERROR_ARG,
-			GetFullMessage(std::current_exception()).c_str());
-		return CommandResult::ERROR;
+		throw ProtocolError(ACK_ERROR_ARG,
+				    GetFullMessage(std::current_exception()).c_str());
 	}
 	filter.Optimize();
 
@@ -110,6 +111,14 @@ handle_match(Client &client, Request args, Response &r, bool fold_case)
 	selection.window = window;
 	selection.sort = sort;
 	selection.descending = descending;
+	return selection;
+}
+
+static CommandResult
+handle_match(Client &client, Request args, Response &r, bool fold_case)
+{
+	SongFilter filter;
+	const auto selection = ParseDatabaseSelection(args, fold_case, filter);
 
 	db_selection_print(r, client.GetPartition(),
 			   selection, true, false);
@@ -129,57 +138,40 @@ handle_search(Client &client, Request args, Response &r)
 }
 
 static CommandResult
-handle_match_add(Client &client, Request args, Response &r, bool fold_case)
+handle_match_add(Client &client, Request args, bool fold_case)
 {
 	SongFilter filter;
-	try {
-		filter.Parse(args, fold_case);
-	} catch (...) {
-		r.Error(ACK_ERROR_ARG,
-			GetFullMessage(std::current_exception()).c_str());
-		return CommandResult::ERROR;
-	}
-	filter.Optimize();
+	const auto selection = ParseDatabaseSelection(args, fold_case, filter);
 
 	auto &partition = client.GetPartition();
-	const ScopeBulkEdit bulk_edit(partition);
-
-	const DatabaseSelection selection("", true, &filter);
 	AddFromDatabase(partition, selection);
 	return CommandResult::OK;
 }
 
 CommandResult
-handle_findadd(Client &client, Request args, Response &r)
+handle_findadd(Client &client, Request args, Response &)
 {
-	return handle_match_add(client, args, r, false);
+	return handle_match_add(client, args, false);
 }
 
 CommandResult
-handle_searchadd(Client &client, Request args, Response &r)
+handle_searchadd(Client &client, Request args, Response &)
 {
-	return handle_match_add(client, args, r, true);
+	return handle_match_add(client, args, true);
 }
 
 CommandResult
-handle_searchaddpl(Client &client, Request args, Response &r)
+handle_searchaddpl(Client &client, Request args, Response &)
 {
 	const char *playlist = args.shift();
 
 	SongFilter filter;
-	try {
-		filter.Parse(args, true);
-	} catch (...) {
-		r.Error(ACK_ERROR_ARG,
-			GetFullMessage(std::current_exception()).c_str());
-		return CommandResult::ERROR;
-	}
-	filter.Optimize();
+	const auto selection = ParseDatabaseSelection(args, true, filter);
 
 	const Database &db = client.GetDatabaseOrThrow();
 
 	search_add_to_playlist(db, client.GetStorage(),
-			       "", playlist, &filter);
+			       playlist, selection);
 	return CommandResult::OK;
 }
 
@@ -266,9 +258,12 @@ handle_list(Client &client, Request args, Response &r)
 	}
 
 	std::unique_ptr<SongFilter> filter;
-	TagType group = TAG_NUM_OF_ITEM_TYPES;
+	std::vector<TagType> tag_types;
 
-	if (args.size == 1) {
+	if (args.size == 1 &&
+	    /* parantheses are the syntax for filter expressions: no
+	       compatibility mode */
+	    args.front()[0] != '(') {
 		/* for compatibility with < 0.12.0 */
 		if (tagType != TAG_ALBUM) {
 			r.FormatError(ACK_ERROR_ARG,
@@ -281,19 +276,30 @@ handle_list(Client &client, Request args, Response &r)
 					    args.shift()));
 	}
 
-	if  (args.size >= 2 &&
-	     StringIsEqual(args[args.size - 2], "group")) {
+	while (args.size >= 2 &&
+	       StringIsEqual(args[args.size - 2], "group")) {
 		const char *s = args[args.size - 1];
-		group = tag_name_parse_i(s);
+		const auto group = tag_name_parse_i(s);
 		if (group == TAG_NUM_OF_ITEM_TYPES) {
 			r.FormatError(ACK_ERROR_ARG,
 				      "Unknown tag type: %s", s);
 			return CommandResult::ERROR;
 		}
 
+		if (group == tagType ||
+		    std::find(tag_types.begin(), tag_types.end(),
+			      group) != tag_types.end()) {
+			r.Error(ACK_ERROR_ARG, "Conflicting group");
+			return CommandResult::ERROR;
+		}
+
+		tag_types.emplace_back(group);
+
 		args.pop_back();
 		args.pop_back();
 	}
+
+	tag_types.emplace_back(tagType);
 
 	if (!args.empty()) {
 		filter.reset(new SongFilter());
@@ -307,13 +313,9 @@ handle_list(Client &client, Request args, Response &r)
 		filter->Optimize();
 	}
 
-	if (tagType < TAG_NUM_OF_ITEM_TYPES && tagType == group) {
-		r.Error(ACK_ERROR_ARG, "Conflicting group");
-		return CommandResult::ERROR;
-	}
-
 	PrintUniqueTags(r, client.GetPartition(),
-			tagType, group, filter.get());
+			{&tag_types.front(), tag_types.size()},
+			filter.get());
 	return CommandResult::OK;
 }
 

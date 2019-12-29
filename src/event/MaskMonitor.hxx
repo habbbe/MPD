@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -34,25 +34,25 @@
 class MaskMonitor final {
 	DeferEvent defer;
 
-	typedef BoundMethod<void(unsigned)> Callback;
+	typedef BoundMethod<void(unsigned) noexcept> Callback;
 	const Callback callback;
 
 	std::atomic_uint pending_mask;
 
 public:
-	MaskMonitor(EventLoop &_loop, Callback _callback)
+	MaskMonitor(EventLoop &_loop, Callback _callback) noexcept
 		:defer(_loop, BIND_THIS_METHOD(RunDeferred)),
 		 callback(_callback), pending_mask(0) {}
 
-	EventLoop &GetEventLoop() {
+	auto &GetEventLoop() const noexcept {
 		return defer.GetEventLoop();
 	}
 
-	void Cancel() {
+	void Cancel() noexcept {
 		defer.Cancel();
 	}
 
-	void OrMask(unsigned new_mask);
+	void OrMask(unsigned new_mask) noexcept;
 
 protected:
 	/* DeferEvent callback */

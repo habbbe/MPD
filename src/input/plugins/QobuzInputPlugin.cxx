@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -27,14 +27,11 @@
 #include "input/FailingInputStream.hxx"
 #include "input/InputPlugin.hxx"
 #include "config/Block.hxx"
-#include "lib/gcrypt/Init.hxx"
+#include "lib/crypto/MD5.hxx"
 #include "thread/Mutex.hxx"
 #include "util/StringCompare.hxx"
 
-#include <stdexcept>
 #include <memory>
-
-#include <time.h>
 
 static QobuzClient *qobuz_client;
 
@@ -126,18 +123,18 @@ QobuzInputStream::OnQobuzTrackError(std::exception_ptr e) noexcept
 static void
 InitQobuzInput(EventLoop &event_loop, const ConfigBlock &block)
 {
-	Gcrypt::Init();
+	GlobalInitMD5();
 
 	const char *base_url = block.GetBlockValue("base_url",
 						   "http://www.qobuz.com/api.json/0.2/");
 
 	const char *app_id = block.GetBlockValue("app_id");
 	if (app_id == nullptr)
-		throw PluginUnavailable("No Qobuz app_id configured");
+		throw PluginUnconfigured("No Qobuz app_id configured");
 
 	const char *app_secret = block.GetBlockValue("app_secret");
 	if (app_secret == nullptr)
-		throw PluginUnavailable("No Qobuz app_secret configured");
+		throw PluginUnconfigured("No Qobuz app_secret configured");
 
 	const char *device_manufacturer_id = block.GetBlockValue("device_manufacturer_id",
 								 "df691fdc-fa36-11e7-9718-635337d7df8f");
@@ -145,11 +142,11 @@ InitQobuzInput(EventLoop &event_loop, const ConfigBlock &block)
 	const char *username = block.GetBlockValue("username");
 	const char *email = block.GetBlockValue("email");
 	if (username == nullptr && email == nullptr)
-		throw PluginUnavailable("No Qobuz username configured");
+		throw PluginUnconfigured("No Qobuz username configured");
 
 	const char *password = block.GetBlockValue("password");
 	if (password == nullptr)
-		throw PluginUnavailable("No Qobuz password configured");
+		throw PluginUnconfigured("No Qobuz password configured");
 
 	const char *format_id = block.GetBlockValue("format_id", "5");
 
@@ -219,5 +216,6 @@ const InputPlugin qobuz_input_plugin = {
 	InitQobuzInput,
 	FinishQobuzInput,
 	OpenQobuzInput,
+	nullptr,
 	ScanQobuzTags,
 };

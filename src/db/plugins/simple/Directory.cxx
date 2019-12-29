@@ -50,7 +50,7 @@ Directory::~Directory() noexcept
 		mounted_database.reset();
 	}
 
-	songs.clear_and_dispose(Song::Disposer());
+	songs.clear_and_dispose(DeleteDisposer());
 	children.clear_and_dispose(DeleteDisposer());
 }
 
@@ -163,23 +163,24 @@ Directory::LookupDirectory(const char *uri) noexcept
 }
 
 void
-Directory::AddSong(Song *song) noexcept
+Directory::AddSong(SongPtr song) noexcept
 {
 	assert(holding_db_lock());
 	assert(song != nullptr);
-	assert(song->parent == this);
+	assert(&song->parent == this);
 
-	songs.push_back(*song);
+	songs.push_back(*song.release());
 }
 
-void
+SongPtr
 Directory::RemoveSong(Song *song) noexcept
 {
 	assert(holding_db_lock());
 	assert(song != nullptr);
-	assert(song->parent == this);
+	assert(&song->parent == this);
 
 	songs.erase(songs.iterator_to(*song));
+	return SongPtr(song);
 }
 
 const Song *
@@ -189,9 +190,9 @@ Directory::FindSong(const char *name_utf8) const noexcept
 	assert(name_utf8 != nullptr);
 
 	for (auto &song : songs) {
-		assert(song.parent == this);
+		assert(&song.parent == this);
 
-		if (strcmp(song.uri, name_utf8) == 0)
+		if (song.filename == name_utf8)
 			return &song;
 	}
 

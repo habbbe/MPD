@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -25,7 +25,7 @@
 #include "SingleMode.hxx"
 #include "util/LazyRandomEngine.hxx"
 
-#include <algorithm>
+#include <utility>
 
 #include <assert.h>
 #include <stdint.h>
@@ -105,11 +105,6 @@ struct Queue {
 	LazyRandomEngine rand;
 
 	explicit Queue(unsigned max_length) noexcept;
-
-	/**
-	 * Deinitializes a queue object.  It does not free the queue
-	 * pointer itself.
-	 */
 	~Queue() noexcept;
 
 	Queue(const Queue &) = delete;

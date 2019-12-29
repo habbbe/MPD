@@ -1,7 +1,20 @@
 libflac_dep = dependency('flac', version: '>= 1.2', required: get_option('flac'))
 libopus_dep = dependency('opus', required: get_option('opus'))
-libvorbis_dep = dependency('vorbis', required: get_option('vorbis'))
-libvorbisidec_dep = dependency('vorbisidec', required: get_option('tremor'))
+
+if get_option('tremor').enabled()
+  # no libvorbis if Tremor was explicitly enabled
+  libvorbis_dep = dependency('', required: false)
+else
+  libvorbis_dep = dependency('vorbis', required: get_option('vorbis'))
+endif
+
+if libvorbis_dep.found()
+  # no Tremor if libvorbis is used
+  libvorbisidec_dep = dependency('', required: false)
+else
+  # attempt to auto-detect Tremor only if libvorbis was disabled or not found
+  libvorbisidec_dep = dependency('vorbisidec', required: get_option('tremor'))
+endif
 
 if get_option('vorbis').enabled() and get_option('tremor').enabled()
 	error('Cannot build both, the Vorbis decoder AND the Tremor (Vorbis fixed-point) decoder')
@@ -27,15 +40,21 @@ endif
 if not libogg_dep.found() and not libflac_dep.found()
   xiph_dep = dependency('', required: false)
   ogg_dep = dependency('', required: false)
+  vorbis_dep = dependency('', required: false)
   flac_dep = dependency('', required: false)
   subdir_done()
 endif
 
 xiph = static_library(
   'xiph',
+  'ScanVorbisComment.cxx',
   'VorbisComments.cxx',
+  'VorbisPicture.cxx',
   'XiphTags.cxx',
   include_directories: inc,
+  dependencies: [
+    libvorbis_dep,
+  ],
 )
 
 xiph_dep = declare_dependency(
@@ -65,6 +84,29 @@ if libogg_dep.found()
   )
 else
   ogg_dep = dependency('', required: false)
+endif
+
+if libvorbis_dep.found() or libvorbisidec_dep.found()
+  vorbis = static_library(
+    'vorbis',
+    'VorbisComments.cxx',
+    include_directories: inc,
+    dependencies: [
+      libvorbis_dep,
+      libvorbisidec_dep,
+    ],
+  )
+
+  vorbis_dep = declare_dependency(
+    link_with: vorbis,
+    dependencies: [
+      ogg_dep,
+      libvorbis_dep,
+      libvorbisidec_dep,
+    ],
+  )
+else
+  vorbis_dep = dependency('', required: false)
 endif
 
 if libflac_dep.found()

@@ -34,14 +34,12 @@
 #include "util/Compiler.h"
 
 #include <cdio/version.h>
-#if LIBCDIO_VERSION_NUM >= 90
 #include <cdio/paranoia/paranoia.h>
-#else
-#include <cdio/paranoia.h>
-#endif
 
 #include <stdexcept>
 #include <utility>
+
+#include <cstdio>
 
 class CdromDrive {
 	cdrom_drive_t *drv = nullptr;

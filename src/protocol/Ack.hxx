@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -23,6 +23,7 @@
 #include "util/StringFormat.hxx"
 
 #include <stdexcept>
+#include <utility>
 
 class Domain;
 
@@ -48,10 +49,11 @@ class ProtocolError : public std::runtime_error {
 	enum ack code;
 
 public:
-	ProtocolError(enum ack _code, const char *msg)
-		:std::runtime_error(msg), code(_code) {}
+	template<typename M>
+	ProtocolError(enum ack _code, M &&msg) noexcept
+		:std::runtime_error(std::forward<M>(msg)), code(_code) {}
 
-	enum ack GetCode() const {
+	enum ack GetCode() const noexcept {
 		return code;
 	}
 };

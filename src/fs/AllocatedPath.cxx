@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -18,37 +18,33 @@
  */
 
 #include "AllocatedPath.hxx"
-#include "Domain.hxx"
 #include "Charset.hxx"
-#include "util/Compiler.h"
-#include "config.h"
-
-#include <exception>
+#include "Features.hxx"
 
 /* no inlining, please */
-AllocatedPath::~AllocatedPath() {}
+AllocatedPath::~AllocatedPath() noexcept = default;
 
 AllocatedPath
 AllocatedPath::FromUTF8(const char *path_utf8) noexcept
 {
-#if defined(HAVE_FS_CHARSET) || defined(_WIN32)
+#ifdef FS_CHARSET_ALWAYS_UTF8
+	return FromFS(path_utf8);
+#else
 	try {
 		return AllocatedPath(::PathFromUTF8(path_utf8));
 	} catch (...) {
 		return nullptr;
 	}
-#else
-	return FromFS(path_utf8);
 #endif
 }
 
 AllocatedPath
 AllocatedPath::FromUTF8Throw(const char *path_utf8)
 {
-#if defined(HAVE_FS_CHARSET) || defined(_WIN32)
-	return AllocatedPath(::PathFromUTF8(path_utf8));
-#else
+#ifdef FS_CHARSET_ALWAYS_UTF8
 	return FromFS(path_utf8);
+#else
+	return AllocatedPath(::PathFromUTF8(path_utf8));
 #endif
 }
 

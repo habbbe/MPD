@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -25,7 +25,7 @@
 #include <memory>
 
 struct Id3Delete {
-	void operator()(struct id3_tag *tag) {
+	void operator()(struct id3_tag *tag) noexcept {
 		id3_tag_delete(tag);
 	}
 };

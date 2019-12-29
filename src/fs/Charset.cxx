@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -18,6 +18,7 @@
  */
 
 #include "Charset.hxx"
+#include "Features.hxx"
 #include "Domain.hxx"
 #include "Log.hxx"
 #include "lib/icu/Converter.hxx"
@@ -30,16 +31,14 @@
 #endif
 
 #include <algorithm>
-#include <stdexcept>
 
 #include <assert.h>
-#include <string.h>
 
 #ifdef HAVE_FS_CHARSET
 
 static std::string fs_charset;
 
-static IcuConverter *fs_converter;
+static std::unique_ptr<IcuConverter> fs_converter;
 
 void
 SetFSCharset(const char *charset)
@@ -60,8 +59,7 @@ void
 DeinitFSCharset() noexcept
 {
 #ifdef HAVE_ICU_CONVERTER
-	delete fs_converter;
-	fs_converter = nullptr;
+	fs_converter.reset();
 #endif
 }
 

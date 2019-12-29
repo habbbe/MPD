@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -22,7 +22,6 @@
 #include "Request.hxx"
 #include "FileCommands.hxx"
 #include "StorageCommands.hxx"
-#include "CommandError.hxx"
 #include "db/Uri.hxx"
 #include "storage/StorageInterface.hxx"
 #include "LocateUri.hxx"
@@ -35,9 +34,10 @@
 #include "decoder/DecoderPrint.hxx"
 #include "ls.hxx"
 #include "mixer/Volume.hxx"
-#include "util/ChronoUtil.hxx"
+#include "time/ChronoUtil.hxx"
 #include "util/UriUtil.hxx"
 #include "util/StringAPI.hxx"
+#include "util/StringView.hxx"
 #include "fs/AllocatedPath.hxx"
 #include "Stats.hxx"
 #include "PlaylistFile.hxx"
@@ -46,7 +46,7 @@
 #include "client/Response.hxx"
 #include "Partition.hxx"
 #include "Instance.hxx"
-#include "Idle.hxx"
+#include "IdleFlags.hxx"
 #include "Log.hxx"
 
 #ifdef ENABLE_DATABASE
@@ -56,7 +56,6 @@
 #endif
 
 #include <assert.h>
-#include <string.h>
 
 static void
 print_spl_list(Response &r, const PlaylistVector &list)
@@ -99,7 +98,7 @@ handle_listfiles(Client &client, Request args, Response &r)
 	/* default is root directory */
 	const auto uri = args.GetOptional(0, "");
 
-	const auto located_uri = LocateUri(uri, &client
+	const auto located_uri = LocateUri(UriPluginKind::STORAGE, uri, &client
 #ifdef ENABLE_DATABASE
 					   , nullptr
 #endif
@@ -147,7 +146,7 @@ public:
 	explicit PrintTagHandler(Response &_response) noexcept
 		:NullTagHandler(WANT_TAG), response(_response) {}
 
-	void OnTag(TagType type, const char *value) noexcept override {
+	void OnTag(TagType type, StringView value) noexcept override {
 		if (response.GetClient().tag_mask.Test(type))
 			tag_print(response, type, value);
 	}
@@ -219,7 +218,7 @@ handle_lsinfo(Client &client, Request args, Response &r)
 		   compatibility, work around this here */
 		uri = "";
 
-	const auto located_uri = LocateUri(uri, &client
+	const auto located_uri = LocateUri(UriPluginKind::INPUT, uri, &client
 #ifdef ENABLE_DATABASE
 					   , nullptr
 #endif

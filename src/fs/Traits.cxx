@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -25,7 +25,7 @@
 template<typename Traits>
 typename Traits::string
 BuildPathImpl(typename Traits::const_pointer_type a, size_t a_size,
-	      typename Traits::const_pointer_type b, size_t b_size)
+	      typename Traits::const_pointer_type b, size_t b_size) noexcept
 {
 	assert(a != nullptr);
 	assert(b != nullptr);
@@ -35,7 +35,10 @@ BuildPathImpl(typename Traits::const_pointer_type a, size_t a_size,
 	if (b_size == 0)
 		return typename Traits::string(a, a_size);
 
-	typename Traits::string result(a, a_size);
+	typename Traits::string result;
+	result.reserve(a_size + 1 + b_size);
+
+	result.append(a, a_size);
 
 	if (!Traits::IsSeparator(a[a_size - 1]))
 		result.push_back(Traits::SEPARATOR);
@@ -50,7 +53,7 @@ BuildPathImpl(typename Traits::const_pointer_type a, size_t a_size,
 
 template<typename Traits>
 typename Traits::const_pointer_type
-GetBasePathImpl(typename Traits::const_pointer_type p)
+GetBasePathImpl(typename Traits::const_pointer_type p) noexcept
 {
 #if !CLANG_CHECK_VERSION(3,6)
 	/* disabled on clang due to -Wtautological-pointer-compare */
@@ -65,7 +68,7 @@ GetBasePathImpl(typename Traits::const_pointer_type p)
 
 template<typename Traits>
 typename Traits::string
-GetParentPathImpl(typename Traits::const_pointer_type p)
+GetParentPathImpl(typename Traits::const_pointer_type p) noexcept
 {
 #if !CLANG_CHECK_VERSION(3,6)
 	/* disabled on clang due to -Wtautological-pointer-compare */
@@ -87,7 +90,7 @@ GetParentPathImpl(typename Traits::const_pointer_type p)
 template<typename Traits>
 typename Traits::const_pointer_type
 RelativePathImpl(typename Traits::const_pointer_type base,
-		 typename Traits::const_pointer_type other)
+		 typename Traits::const_pointer_type other) noexcept
 {
 	assert(base != nullptr);
 	assert(other != nullptr);

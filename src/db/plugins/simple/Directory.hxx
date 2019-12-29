@@ -20,6 +20,7 @@
 #ifndef MPD_DIRECTORY_HXX
 #define MPD_DIRECTORY_HXX
 
+#include "Ptr.hxx"
 #include "util/Compiler.h"
 #include "db/Visitor.hxx"
 #include "db/PlaylistVector.hxx"
@@ -42,6 +43,12 @@ static constexpr unsigned DEVICE_INARCHIVE = -1;
  * value for Directory::device).
  */
 static constexpr unsigned DEVICE_CONTAINER = -2;
+
+/**
+ * Virtual directory that is really a playlist file (special value for
+ * Directory::device).
+ */
+static constexpr unsigned DEVICE_PLAYLIST = -3;
 
 class SongFilter;
 
@@ -108,6 +115,16 @@ public:
 	gcc_malloc gcc_returns_nonnull
 	static Directory *NewRoot() noexcept {
 		return new Directory(std::string(), nullptr);
+	}
+
+	/**
+	 * Is this really a regular file which is being treated like a
+	 * directory?
+	 */
+	bool IsReallyAFile() const noexcept {
+		return device == DEVICE_INARCHIVE ||
+			device == DEVICE_PLAYLIST ||
+			device == DEVICE_CONTAINER;
 	}
 
 	bool IsMount() const noexcept {
@@ -242,14 +259,14 @@ public:
 	 * Add a song object to this directory.  Its "parent" attribute must
 	 * be set already.
 	 */
-	void AddSong(Song *song) noexcept;
+	void AddSong(SongPtr song) noexcept;
 
 	/**
 	 * Remove a song object from this directory (which effectively
 	 * invalidates the song object, because the "parent" attribute becomes
-	 * stale), but does not free it.
+	 * stale), and return ownership to the caller.
 	 */
-	void RemoveSong(Song *song) noexcept;
+	SongPtr RemoveSong(Song *song) noexcept;
 
 	/**
 	 * Caller must lock the #db_mutex.

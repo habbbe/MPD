@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -21,8 +21,8 @@
 #include "db/PlaylistVector.hxx"
 #include "fs/io/TextFile.hxx"
 #include "fs/io/BufferedOutputStream.hxx"
+#include "time/ChronoUtil.hxx"
 #include "util/StringStrip.hxx"
-#include "util/ChronoUtil.hxx"
 #include "util/RuntimeError.hxx"
 
 #include <string.h>

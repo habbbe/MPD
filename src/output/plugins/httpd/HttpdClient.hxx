@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -83,6 +83,11 @@ class HttpdClient final
 	 */
 	bool head_method = false;
 
+	/**
+	 * Should we reject this request?
+	 */
+	bool should_reject = false;
+
 	/* ICY */
 
 	/**
@@ -142,6 +147,8 @@ public:
 
 	/**
 	 * Frees the client and removes it from the server's client list.
+	 *
+	 * Caller must lock the mutex.
 	 */
 	void Close() noexcept;
 

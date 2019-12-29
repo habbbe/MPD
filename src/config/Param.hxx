@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -58,6 +58,27 @@ struct ConfigParam {
 	 * Throws #std::runtime_error on error.
 	 */
 	AllocatedPath GetPath() const;
+
+	/**
+	 * Call this method in a "catch" block to throw a nested
+	 * exception showing the location of this setting in the
+	 * configuration file.
+	 */
+	[[noreturn]]
+	void ThrowWithNested() const;
+
+	/**
+	 * Invoke a function with the configured value; if the
+	 * function throws, call ThrowWithNested().
+	 */
+	template<typename F>
+	auto With(F &&f) const {
+		try {
+			return f(value.c_str());
+		} catch (...) {
+			ThrowWithNested();
+		}
+	}
 };
 
 #endif

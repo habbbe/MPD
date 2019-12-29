@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -57,15 +57,12 @@ InputStream::OpenReady(const char *uri, Mutex &mutex)
 	is->SetHandler(&handler);
 
 	{
-		const std::lock_guard<Mutex> protect(mutex);
+		std::unique_lock<Mutex> lock(mutex);
 
-		while (true) {
+		handler.cond.wait(lock, [&is]{
 			is->Update();
-			if (is->IsReady())
-				break;
-
-			handler.cond.wait(mutex);
-		}
+			return is->IsReady();
+		});
 
 		is->Check();
 	}

@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -25,14 +25,14 @@
 #include "../../OutputAPI.hxx"
 #include "thread/Mutex.hxx"
 #include "thread/Cond.hxx"
-#include "util/Macros.hxx"
 #include "util/Domain.hxx"
-#include "system/ByteOrder.hxx"
+#include "util/ByteOrder.hxx"
 #include "Log.hxx"
 
 #include <SLES/OpenSLES.h>
 #include <SLES/OpenSLES_Android.h>
 
+#include <iterator>
 #include <stdexcept>
 
 class SlesOutput final : AudioOutput  {
@@ -212,7 +212,7 @@ SlesOutput::Open(AudioFormat &audio_format)
 	};
 
 	result = engine.CreateAudioPlayer(&_object, &audioSrc, &audioSnk,
-					  ARRAY_SIZE(ids2), ids2, req2);
+					  std::size(ids2), ids2, req2);
 	if (result != SL_RESULT_SUCCESS) {
 		mix_object.Destroy();
 		engine_object.Destroy();
@@ -229,6 +229,14 @@ SlesOutput::Open(AudioFormat &audio_format)
 						    SL_ANDROID_KEY_STREAM_TYPE,
 						    &stream_type,
 						    sizeof(stream_type));
+
+		/* MPD doesn't care much about latency, so let's
+		   configure power saving mode */
+		SLuint32 performance_mode = SL_ANDROID_PERFORMANCE_POWER_SAVING;
+		(*android_config)->SetConfiguration(android_config,
+						    SL_ANDROID_KEY_PERFORMANCE_MODE,
+						    &performance_mode,
+						    sizeof(performance_mode));
 	}
 
 	result = play_object.Realize(false);
@@ -309,14 +317,14 @@ SlesOutput::Play(const void *chunk, size_t size)
 		pause = false;
 	}
 
-	const std::lock_guard<Mutex> protect(mutex);
+	std::unique_lock<Mutex> lock(mutex);
 
 	assert(filled < BUFFER_SIZE);
 
-	while (n_queued == N_BUFFERS) {
+	cond.wait(lock, [this]{
 		assert(filled == 0);
-		cond.wait(mutex);
-	}
+		return n_queued != N_BUFFERS;
+	});
 
 	size_t nbytes = std::min(BUFFER_SIZE - filled, size);
 	memcpy(buffers[next] + filled, chunk, nbytes);
@@ -338,12 +346,11 @@ SlesOutput::Play(const void *chunk, size_t size)
 void
 SlesOutput::Drain()
 {
-	const std::lock_guard<Mutex> protect(mutex);
+	std::unique_lock<Mutex> lock(mutex);
 
 	assert(filled < BUFFER_SIZE);
 
-	while (n_queued > 0)
-		cond.wait(mutex);
+	cond.wait(lock, [this]{ return n_queued == 0; });
 }
 
 void
@@ -389,7 +396,7 @@ SlesOutput::PlayedCallback()
 	const std::lock_guard<Mutex> protect(mutex);
 	assert(n_queued > 0);
 	--n_queued;
-	cond.signal();
+	cond.notify_one();
 }
 
 static bool

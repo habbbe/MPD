@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2018 Max Kellermann <max.kellermann@gmail.com>
+ * Copyright 2012-2019 Max Kellermann <max.kellermann@gmail.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -77,6 +77,12 @@ public:
 	 */
 	gcc_pure
 	bool IsValid() const noexcept;
+
+	/**
+	 * Ask the kernel whether this is a regular file.
+	 */
+	gcc_pure
+	bool IsRegularFile() const noexcept;
 
 	/**
 	 * Ask the kernel whether this is a pipe.
@@ -226,6 +232,12 @@ public:
 	ssize_t Read(void *buffer, size_t length) noexcept {
 		return ::read(fd, buffer, length);
 	}
+
+	/**
+	 * Read until all of the given buffer has been filled.  Throws
+	 * on error.
+	 */
+	void FullRead(void *buffer, size_t length);
 
 	ssize_t Write(const void *buffer, size_t length) noexcept {
 		return ::write(fd, buffer, length);

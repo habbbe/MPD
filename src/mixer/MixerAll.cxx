@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -21,11 +21,8 @@
 #include "MixerControl.hxx"
 #include "MixerInternal.hxx"
 #include "MixerList.hxx"
-#include "output/Filtered.hxx"
 #include "pcm/Volume.hxx"
 #include "Log.hxx"
-
-#include <stdexcept>
 
 #include <assert.h>
 
@@ -56,7 +53,7 @@ MultipleOutputs::GetVolume() const noexcept
 	unsigned ok = 0;
 	int total = 0;
 
-	for (auto *ao : outputs) {
+	for (const auto &ao : outputs) {
 		int volume = output_mixer_get_volume(*ao);
 		if (volume >= 0) {
 			total += volume;
@@ -99,7 +96,7 @@ MultipleOutputs::SetVolume(unsigned volume) noexcept
 	assert(volume <= 100);
 
 	bool success = false;
-	for (auto *ao : outputs)
+	for (const auto &ao : outputs)
 		success = output_mixer_set_volume(*ao, volume)
 			|| success;
 
@@ -125,7 +122,7 @@ MultipleOutputs::GetSoftwareVolume() const noexcept
 	unsigned ok = 0;
 	int total = 0;
 
-	for (auto *ao : outputs) {
+	for (const auto &ao : outputs) {
 		int volume = output_mixer_get_software_volume(*ao);
 		if (volume >= 0) {
 			total += volume;
@@ -144,7 +141,7 @@ MultipleOutputs::SetSoftwareVolume(unsigned volume) noexcept
 {
 	assert(volume <= PCM_VOLUME_1);
 
-	for (auto *ao : outputs) {
+	for (const auto &ao : outputs) {
 		auto *mixer = ao->GetMixer();
 
 		if (mixer != nullptr &&

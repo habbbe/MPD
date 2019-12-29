@@ -15,6 +15,7 @@ tag_sources = [
   'MixRamp.cxx',
   'Generic.cxx',
   'Id3MusicBrainz.cxx',
+  'Id3Picture.cxx',
   'ApeLoader.cxx',
   'ApeReplayGain.cxx',
   'ApeTag.cxx',
@@ -33,9 +34,6 @@ if libid3tag_dep.found()
   ]
 endif
 
-chromaprint_dep = dependency('libchromaprint', required: get_option('chromaprint'))
-conf.set('ENABLE_CHROMAPRINT', chromaprint_dep.found())
-
 tag = static_library(
   'tag',
   tag_sources,
@@ -48,6 +46,7 @@ tag = static_library(
 tag_dep = declare_dependency(
   link_with: tag,
   dependencies: [
+    time_dep,
     util_dep,
   ],
 )

@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -22,13 +22,11 @@
 #include "tag/Handler.hxx"
 #include "tag/Builder.hxx"
 #include "util/MimeType.hxx"
-#include "util/UriUtil.hxx"
 #include "decoder/DecoderList.hxx"
 #include "decoder/DecoderPlugin.hxx"
 #include "input/InputStream.hxx"
 #include "thread/Mutex.hxx"
-
-#include <exception>
+#include "util/UriExtract.hxx"
 
 #include <assert.h>
 
@@ -73,14 +71,12 @@ tag_stream_scan(InputStream &is, TagHandler &handler) noexcept
 }
 
 bool
-tag_stream_scan(const char *uri, TagHandler &handler) noexcept
-try {
+tag_stream_scan(const char *uri, TagHandler &handler)
+{
 	Mutex mutex;
 
 	auto is = InputStream::OpenReady(uri, mutex);
 	return tag_stream_scan(*is, handler);
-} catch (const std::exception &e) {
-	return false;
 }
 
 bool
@@ -102,12 +98,10 @@ tag_stream_scan(InputStream &is, TagBuilder &builder,
 
 bool
 tag_stream_scan(const char *uri, TagBuilder &builder,
-		AudioFormat *audio_format) noexcept
-try {
+		AudioFormat *audio_format)
+{
 	Mutex mutex;
 
 	auto is = InputStream::OpenReady(uri, mutex);
 	return tag_stream_scan(*is, builder, audio_format);
-} catch (const std::exception &e) {
-	return false;
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -86,6 +86,7 @@ enum class ConfigBlockOption {
 	AUDIO_OUTPUT,
 	DECODER,
 	INPUT,
+	INPUT_CACHE,
 	PLAYLIST_PLUGIN,
 	RESAMPLER,
 	AUDIO_FILTER,

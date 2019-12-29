@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -20,11 +20,27 @@
 #include "IcyInputStream.hxx"
 #include "IcyMetaDataParser.hxx"
 #include "tag/Tag.hxx"
+#include "util/UriExtract.hxx"
+#include "util/UriQueryParser.hxx"
+#include "util/StringView.hxx"
+
+#include <string>
 
 IcyInputStream::IcyInputStream(InputStreamPtr _input,
-			       std::shared_ptr<IcyMetaDataParser> _parser) noexcept
+			       std::shared_ptr<IcyMetaDataParser> _parser)
 	:ProxyInputStream(std::move(_input)), parser(std::move(_parser))
 {
+#ifdef HAVE_ICU_CONVERTER
+	const char *fragment = uri_get_fragment(GetURI());
+	if (fragment != nullptr) {
+		const auto charset = UriFindRawQueryParameter(fragment,
+							      "charset");
+		if (charset != nullptr) {
+			const std::string copy(charset.data, charset.size);
+			parser->SetCharset(copy.c_str());
+		}
+	}
+#endif
 }
 
 IcyInputStream::~IcyInputStream() noexcept = default;
@@ -47,7 +63,7 @@ IcyInputStream::Update() noexcept
 }
 
 std::unique_ptr<Tag>
-IcyInputStream::ReadTag()
+IcyInputStream::ReadTag() noexcept
 {
 	auto new_input_tag = ProxyInputStream::ReadTag();
 	if (!IsEnabled())
@@ -80,13 +96,14 @@ IcyInputStream::ReadTag()
 }
 
 size_t
-IcyInputStream::Read(void *ptr, size_t read_size)
+IcyInputStream::Read(std::unique_lock<Mutex> &lock,
+		     void *ptr, size_t read_size)
 {
 	if (!IsEnabled())
-		return ProxyInputStream::Read(ptr, read_size);
+		return ProxyInputStream::Read(lock, ptr, read_size);
 
 	while (true) {
-		size_t nbytes = ProxyInputStream::Read(ptr, read_size);
+		size_t nbytes = ProxyInputStream::Read(lock, ptr, read_size);
 		if (nbytes == 0)
 			return 0;
 

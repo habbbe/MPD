@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -21,11 +21,10 @@
 #define MPD_INPUT_CURL_HXX
 
 #include "input/Ptr.hxx"
+#include "thread/Mutex.hxx"
 
 #include <string>
 #include <map>
-
-class Mutex;
 
 extern const struct InputPlugin input_plugin_curl;
 

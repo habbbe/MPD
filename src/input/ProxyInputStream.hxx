@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -60,11 +60,13 @@ public:
 	/* virtual methods from InputStream */
 	void Check() override;
 	void Update() noexcept override;
-	void Seek(offset_type new_offset) override;
-	bool IsEOF() noexcept override;
-	std::unique_ptr<Tag> ReadTag() override;
-	bool IsAvailable() noexcept override;
-	size_t Read(void *ptr, size_t read_size) override;
+	void Seek(std::unique_lock<Mutex> &lock,
+		  offset_type new_offset) override;
+	bool IsEOF() const noexcept override;
+	std::unique_ptr<Tag> ReadTag() noexcept override;
+	bool IsAvailable() const noexcept override;
+	size_t Read(std::unique_lock<Mutex> &lock,
+		    void *ptr, size_t read_size) override;
 
 protected:
 	/**

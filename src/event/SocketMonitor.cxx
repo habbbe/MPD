@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -20,21 +20,17 @@
 #include "SocketMonitor.hxx"
 #include "Loop.hxx"
 
-#include <assert.h>
+#include <utility>
 
-#ifdef _WIN32
-#include <winsock2.h>
-#else
-#include <sys/socket.h>
-#endif
+#include <assert.h>
 
 void
 SocketMonitor::Dispatch(unsigned flags) noexcept
 {
 	flags &= GetScheduledFlags();
 
-	if (flags != 0 && !OnSocketReady(flags) && IsDefined())
-		Cancel();
+	if (flags != 0)
+		OnSocketReady(flags);
 }
 
 SocketMonitor::~SocketMonitor() noexcept
@@ -68,20 +64,24 @@ SocketMonitor::Close() noexcept
 	Steal().Close();
 }
 
-void
+bool
 SocketMonitor::Schedule(unsigned flags) noexcept
 {
 	assert(IsDefined());
 
 	if (flags == GetScheduledFlags())
-		return;
+		return true;
 
+	bool success;
 	if (scheduled_flags == 0)
-		loop.AddFD(fd.Get(), flags, *this);
+		success = loop.AddFD(fd.Get(), flags, *this);
 	else if (flags == 0)
-		loop.RemoveFD(fd.Get(), *this);
+		success = loop.RemoveFD(fd.Get(), *this);
 	else
-		loop.ModifyFD(fd.Get(), flags, *this);
+		success = loop.ModifyFD(fd.Get(), flags, *this);
 
-	scheduled_flags = flags;
+	if (success)
+		scheduled_flags = flags;
+
+	return success;
 }

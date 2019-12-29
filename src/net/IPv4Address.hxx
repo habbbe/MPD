@@ -31,7 +31,7 @@
 #define IPV4_ADDRESS_HXX
 
 #include "SocketAddress.hxx"
-#include "system/ByteOrder.hxx"
+#include "util/ByteOrder.hxx"
 
 #include <stdint.h>
 
@@ -168,7 +168,7 @@ public:
 	}
 
 	constexpr operator SocketAddress() const noexcept {
-		return SocketAddress((const struct sockaddr *)&address,
+		return SocketAddress((const struct sockaddr *)(const void *)&address,
 				     sizeof(address));
 	}
 

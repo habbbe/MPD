@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -32,10 +32,10 @@
 #include "input/InputStream.hxx"
 #include "CheckAudioFormat.hxx"
 #include "util/bit_reverse.h"
-#include "system/ByteOrder.hxx"
+#include "util/ByteOrder.hxx"
+#include "util/StringView.hxx"
 #include "tag/Handler.hxx"
 #include "DsdLib.hxx"
-#include "Log.hxx"
 
 struct DsdiffHeader {
 	DsdId id;
@@ -185,34 +185,34 @@ dsdiff_read_prop(DecoderClient *client, InputStream &is,
 }
 
 static void
-dsdiff_handle_native_tag(InputStream &is,
+dsdiff_handle_native_tag(DecoderClient *client, InputStream &is,
 			 TagHandler &handler,
 			 offset_type tagoffset,
 			 TagType type)
 {
-	if (!dsdlib_skip_to(nullptr, is, tagoffset))
+	if (!dsdlib_skip_to(client, is, tagoffset))
 		return;
 
 	struct dsdiff_native_tag metatag;
 
-	if (!decoder_read_full(nullptr, is, &metatag, sizeof(metatag)))
+	if (!decoder_read_full(client, is, &metatag, sizeof(metatag)))
 		return;
 
 	uint32_t length = FromBE32(metatag.size);
 
 	/* Check and limit size of the tag to prevent a stack overflow */
-	if (length == 0 || length > 60)
+	constexpr size_t MAX_LENGTH = 1024;
+	if (length == 0 || length > MAX_LENGTH)
 		return;
 
-	char string[length + 1];
+	char string[MAX_LENGTH];
 	char *label;
 	label = string;
 
-	if (!decoder_read_full(nullptr, is, label, (size_t)length))
+	if (!decoder_read_full(client, is, label, (size_t)length))
 		return;
 
-	string[length] = '\0';
-	handler.OnTag(type, label);
+	handler.OnTag(type, {label, length});
 	return;
 }
 
@@ -291,11 +291,11 @@ dsdiff_read_metadata_extra(DecoderClient *client, InputStream &is,
 #endif
 
 	if (artist_offset != 0)
-		dsdiff_handle_native_tag(is, handler,
+		dsdiff_handle_native_tag(client, is, handler,
 					 artist_offset, TAG_ARTIST);
 
 	if (title_offset != 0)
-		dsdiff_handle_native_tag(is, handler,
+		dsdiff_handle_native_tag(client, is, handler,
 					 title_offset, TAG_TITLE);
 	return true;
 }
@@ -362,6 +362,7 @@ dsdiff_decode_chunk(DecoderClient &client, InputStream &is,
 		    unsigned channels, unsigned sample_rate,
 		    const offset_type total_bytes)
 {
+	const unsigned kbit_rate = channels * sample_rate / 1000;
 	const offset_type start_offset = is.GetOffset();
 
 	uint8_t buffer[8192];
@@ -408,7 +409,7 @@ dsdiff_decode_chunk(DecoderClient &client, InputStream &is,
 			bit_reverse_buffer(buffer, buffer + nbytes);
 
 		cmd = client.SubmitData(is, buffer, nbytes,
-					sample_rate / 1000);
+					kbit_rate);
 	}
 
 	return true;
@@ -487,15 +488,8 @@ static const char *const dsdiff_mime_types[] = {
 	nullptr
 };
 
-const struct DecoderPlugin dsdiff_decoder_plugin = {
-	"dsdiff",
-	dsdiff_init,
-	nullptr,
-	dsdiff_stream_decode,
-	nullptr,
-	nullptr,
-	dsdiff_scan_stream,
-	nullptr,
-	dsdiff_suffixes,
-	dsdiff_mime_types,
-};
+constexpr DecoderPlugin dsdiff_decoder_plugin =
+	DecoderPlugin("dsdiff", dsdiff_stream_decode, dsdiff_scan_stream)
+	.WithInit(dsdiff_init)
+	.WithSuffixes(dsdiff_suffixes)
+	.WithMimeTypes(dsdiff_mime_types);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -42,10 +42,16 @@ public:
 		ScheduleRead();
 	}
 
+	using SocketMonitor::GetEventLoop;
 	using SocketMonitor::IsDefined;
 	using SocketMonitor::Close;
 
 private:
+	/**
+	 * @return the number of bytes read from the socket, 0 if the
+	 * socket isn't ready for reading, -1 on error (the socket has
+	 * been closed and probably destructed)
+	 */
 	ssize_t DirectRead(void *data, size_t length) noexcept;
 
 	/**

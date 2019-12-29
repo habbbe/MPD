@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -35,7 +35,7 @@ socket_bind_listen(int domain, int type, int protocol,
 		throw MakeSocketError("Failed to create socket");
 
 #ifdef HAVE_UN
-	if (domain == AF_UNIX) {
+	if (domain == AF_LOCAL) {
 		/* Prevent access until right permissions are set */
 		fchmod(fd.Get(), 0);
 	}

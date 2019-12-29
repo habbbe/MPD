@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -24,7 +24,7 @@
 #include "system/Error.hxx"
 
 #ifdef _WIN32
-#include <fileapi.h>
+#include "time/FileTime.hxx"
 #else
 #include <sys/stat.h>
 #endif
@@ -32,30 +32,6 @@
 #include <chrono>
 
 #include <stdint.h>
-
-#ifdef _WIN32
-
-static inline constexpr uint64_t
-ConstructUint64(DWORD lo, DWORD hi)
-{
-	return uint64_t(lo) | (uint64_t(hi) << 32);
-}
-
-static constexpr time_t
-FileTimeToTimeT(FILETIME ft)
-{
-	return (ConstructUint64(ft.dwLowDateTime, ft.dwHighDateTime)
-		- 116444736000000000) / 10000000;
-}
-
-static std::chrono::system_clock::time_point
-FileTimeToChrono(FILETIME ft)
-{
-	// TODO: eliminate the time_t roundtrip, preserve sub-second resolution
-	return std::chrono::system_clock::from_time_t(FileTimeToTimeT(ft));
-}
-
-#endif
 
 class FileInfo {
 	friend bool GetFileInfo(Path path, FileInfo &info,

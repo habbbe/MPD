@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -36,12 +36,13 @@
 #include "fs/Traits.hxx"
 #include "fs/FileSystem.hxx"
 #include "fs/StandardDirectory.hxx"
-#include "system/Error.hxx"
-#include "util/Macros.hxx"
-#include "util/RuntimeError.hxx"
 #include "util/Domain.hxx"
 #include "util/OptionDef.hxx"
 #include "util/OptionParser.hxx"
+
+#ifdef _WIN32
+#include "system/Error.hxx"
+#endif
 
 #ifdef ENABLE_DATABASE
 #include "db/Registry.hxx"
@@ -108,17 +109,17 @@ static constexpr Domain cmdline_domain("cmdline");
 gcc_noreturn
 static void version(void)
 {
-	printf("Music Player Daemon " VERSION " (%s)\n"
+	printf("Music Player Daemon " VERSION " (%s)"
 	       "\n"
 	       "Copyright 2003-2007 Warren Dukes <warren.dukes@gmail.com>\n"
 	       "Copyright 2008-2018 Max Kellermann <max.kellermann@gmail.com>\n"
 	       "This is free software; see the source for copying conditions.  There is NO\n"
-	       "warranty; not even MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n"
+	       "warranty; not even MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n",
+	       GIT_VERSION);
 
 #ifdef ENABLE_DATABASE
-	       "\n"
-	       "Database plugins:\n",
-	       GIT_VERSION);
+	printf("\n"
+	       "Database plugins:\n");
 
 	for (auto i = database_plugins; *i != nullptr; ++i)
 		printf(" %s", (*i)->name);
@@ -129,18 +130,18 @@ static void version(void)
 	for (auto i = storage_plugins; *i != nullptr; ++i)
 		printf(" %s", (*i)->name);
 
-	printf("\n"
+	printf("\n");
 #endif
 
 #ifdef ENABLE_NEIGHBOR_PLUGINS
-	       "\n"
+	printf("\n"
 	       "Neighbor plugins:\n");
 	for (auto i = neighbor_plugins; *i != nullptr; ++i)
 		printf(" %s", (*i)->name);
 
-	printf("\n"
 #endif
 
+	printf("\n"
 	       "\n"
 	       "Decoders plugins:\n");
 
@@ -383,7 +384,7 @@ ParseCommandLine(int argc, char **argv, struct options &options,
 #ifdef _UNICODE
 		wchar_t buffer[MAX_PATH];
 		auto result = MultiByteToWideChar(CP_ACP, 0, config_file, -1,
-						  buffer, ARRAY_SIZE(buffer));
+						  buffer, std::size(buffer));
 		if (result <= 0)
 			throw MakeLastError("MultiByteToWideChar() failed");
 

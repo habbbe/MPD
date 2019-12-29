@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -22,16 +22,16 @@
 #include "config.h"
 #include "FileCommands.hxx"
 #include "Request.hxx"
-#include "CommandError.hxx"
 #include "protocol/Ack.hxx"
 #include "client/Client.hxx"
 #include "client/Response.hxx"
 #include "util/CharUtil.hxx"
-#include "util/UriUtil.hxx"
+#include "util/OffsetPointer.hxx"
+#include "util/StringView.hxx"
+#include "util/UriExtract.hxx"
 #include "tag/Handler.hxx"
 #include "tag/Generic.hxx"
-#include "TagStream.hxx"
-#include "TagFile.hxx"
+#include "TagAny.hxx"
 #include "storage/StorageInterface.hxx"
 #include "fs/AllocatedPath.hxx"
 #include "fs/FileInfo.hxx"
@@ -110,13 +110,12 @@ handle_listfiles_local(Response &r, Path path_fs)
 
 gcc_pure
 static bool
-IsValidName(const char *p) noexcept
+IsValidName(const StringView s) noexcept
 {
-	if (!IsAlphaASCII(*p))
+	if (s.empty() || !IsAlphaASCII(s.front()))
 		return false;
 
-	while (*++p) {
-		const char ch = *p;
+	for (const char ch : s) {
 		if (!IsAlphaASCII(ch) && ch != '_' && ch != '-')
 			return false;
 	}
@@ -126,11 +125,9 @@ IsValidName(const char *p) noexcept
 
 gcc_pure
 static bool
-IsValidValue(const char *p) noexcept
+IsValidValue(const StringView s) noexcept
 {
-	while (*p) {
-		const char ch = *p++;
-
+	for (const char ch : s) {
 		if ((unsigned char)ch < 0x20)
 			return false;
 	}
@@ -145,71 +142,13 @@ public:
 	explicit PrintCommentHandler(Response &_response) noexcept
 		:NullTagHandler(WANT_PAIR), response(_response) {}
 
-	void OnPair(const char *key, const char *value) noexcept override {
+	void OnPair(StringView key, StringView value) noexcept override {
 		if (IsValidName(key) && IsValidValue(value))
-			response.Format("%s: %s\n", key, value);
+			response.Format("%.*s: %.*s\n",
+					int(key.size), key.data,
+					int(value.size), value.data);
 	}
 };
-
-static CommandResult
-read_stream_comments(Response &r, const char *uri)
-{
-	PrintCommentHandler h(r);
-	if (!tag_stream_scan(uri, h)) {
-		r.Error(ACK_ERROR_NO_EXIST, "Failed to load file");
-		return CommandResult::ERROR;
-	}
-
-	return CommandResult::OK;
-
-}
-
-static CommandResult
-read_file_comments(Response &r, const Path path_fs)
-{
-	PrintCommentHandler h(r);
-	if (!ScanFileTagsNoGeneric(path_fs, h)) {
-		r.Error(ACK_ERROR_NO_EXIST, "Failed to load file");
-		return CommandResult::ERROR;
-	}
-
-	ScanGenericTags(path_fs, h);
-
-	return CommandResult::OK;
-
-}
-
-static CommandResult
-read_db_comments(Client &client, Response &r, const char *uri)
-{
-#ifdef ENABLE_DATABASE
-	const Storage *storage = client.GetStorage();
-	if (storage == nullptr) {
-#else
-		(void)client;
-		(void)uri;
-#endif
-		r.Error(ACK_ERROR_NO_EXIST, "No database");
-		return CommandResult::ERROR;
-#ifdef ENABLE_DATABASE
-	}
-
-	{
-		AllocatedPath path_fs = storage->MapFS(uri);
-		if (!path_fs.IsNull())
-			return read_file_comments(r, path_fs);
-	}
-
-	{
-		const std::string uri2 = storage->MapUTF8(uri);
-		if (uri_has_scheme(uri2.c_str()))
-			return read_stream_comments(r, uri2.c_str());
-	}
-
-	r.Error(ACK_ERROR_NO_EXIST, "No such file");
-	return CommandResult::ERROR;
-#endif
-}
 
 CommandResult
 handle_read_comments(Client &client, Request args, Response &r)
@@ -218,23 +157,9 @@ handle_read_comments(Client &client, Request args, Response &r)
 
 	const char *const uri = args.front();
 
-	const auto located_uri = LocateUri(uri, &client
-#ifdef ENABLE_DATABASE
-					   , nullptr
-#endif
-					   );
-	switch (located_uri.type) {
-	case LocatedUri::Type::ABSOLUTE:
-		return read_stream_comments(r, located_uri.canonical_uri);
-
-	case LocatedUri::Type::RELATIVE:
-		return read_db_comments(client, r, located_uri.canonical_uri);
-
-	case LocatedUri::Type::PATH:
-		return read_file_comments(r, located_uri.path);
-	}
-
-	gcc_unreachable();
+	PrintCommentHandler handler(r);
+	TagScanAny(client, uri, handler);
+	return CommandResult::OK;
 }
 
 /**
@@ -287,24 +212,17 @@ read_stream_art(Response &r, const char *uri, size_t offset)
 
 	const offset_type art_file_size = is->GetSize();
 
-	constexpr size_t CHUNK_SIZE = 8192;
-	uint8_t buffer[CHUNK_SIZE];
+	uint8_t buffer[Response::MAX_BINARY_SIZE];
 	size_t read_size;
 
 	{
-		const std::lock_guard<Mutex> protect(mutex);
-		is->Seek(offset);
-		read_size = is->Read(&buffer, CHUNK_SIZE);
+		std::unique_lock<Mutex> lock(mutex);
+		is->Seek(lock, offset);
+		read_size = is->Read(lock, &buffer, sizeof(buffer));
 	}
 
-	r.Format("size: %" PRIoffset "\n"
-			 "binary: %u\n",
-			 art_file_size,
-			 read_size
-			 );
-
-	r.Write(buffer, read_size);
-	r.Write("\n");
+	r.Format("size: %" PRIoffset "\n", art_file_size);
+	r.WriteBinary({buffer, read_size});
 
 	return CommandResult::OK;
 }
@@ -331,7 +249,7 @@ handle_album_art(Client &client, Request args, Response &r)
 	const char *uri = args.front();
 	size_t offset = args.ParseUnsigned(1);
 
-	const auto located_uri = LocateUri(uri, &client
+	const auto located_uri = LocateUri(UriPluginKind::INPUT, uri, &client
 #ifdef ENABLE_DATABASE
 					   , nullptr
 #endif
@@ -353,3 +271,62 @@ handle_album_art(Client &client, Request args, Response &r)
 	return CommandResult::ERROR;
 }
 
+class PrintPictureHandler final : public NullTagHandler {
+	Response &response;
+
+	const size_t offset;
+
+	bool found = false;
+
+	bool bad_offset = false;
+
+public:
+	PrintPictureHandler(Response &_response, size_t _offset) noexcept
+		:NullTagHandler(WANT_PICTURE), response(_response),
+		 offset(_offset) {}
+
+	void RethrowError() const {
+		if (bad_offset)
+			throw ProtocolError(ACK_ERROR_ARG, "Bad file offset");
+	}
+
+	void OnPicture(const char *mime_type,
+		       ConstBuffer<void> buffer) noexcept override {
+		if (found)
+			/* only use the first picture */
+			return;
+
+		found = true;
+
+		if (offset > buffer.size) {
+			bad_offset = true;
+			return;
+		}
+
+		response.Format("size: %" PRIoffset "\n", buffer.size);
+
+		if (mime_type != nullptr)
+			response.Format("type: %s\n", mime_type);
+
+		buffer.size -= offset;
+		if (buffer.size > Response::MAX_BINARY_SIZE)
+			buffer.size = Response::MAX_BINARY_SIZE;
+		buffer.data = OffsetPointer(buffer.data, offset);
+
+		response.WriteBinary(buffer);
+	}
+};
+
+CommandResult
+handle_read_picture(Client &client, Request args, Response &r)
+{
+	assert(args.size == 2);
+
+	const char *const uri = args.front();
+	const size_t offset = args.ParseUnsigned(1);
+
+	PrintPictureHandler handler(r, offset);
+	TagScanAny(client, uri, handler);
+	handler.RethrowError();
+	return CommandResult::OK;
+}

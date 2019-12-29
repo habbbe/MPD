@@ -15,8 +15,8 @@ libmpdclient = MesonProject(
 )
 
 libogg = AutotoolsProject(
-    'http://downloads.xiph.org/releases/ogg/libogg-1.3.3.tar.xz',
-    '4f3fc6178a533d392064f14776b23c397ed4b9f48f5de297aba73b643f955c08',
+    'http://downloads.xiph.org/releases/ogg/libogg-1.3.4.tar.xz',
+    'c163bc12bc300c401b6aa35907ac682671ea376f13ae0969a220f7ddf71893fe',
     'lib/libogg.a',
     [
         '--disable-shared', '--enable-static',
@@ -38,8 +38,8 @@ libvorbis = AutotoolsProject(
 )
 
 opus = AutotoolsProject(
-    'https://archive.mozilla.org/pub/opus/opus-1.3.tar.gz',
-    '4f3d69aefdf2dbaf9825408e452a8a414ffc60494c70633560700398820dc550',
+    'https://archive.mozilla.org/pub/opus/opus-1.3.1.tar.gz',
+    '65b58e1e25b2a114157014736a3d9dfeaad8d41be1c8179866f144a2fb44ff9d',
     'lib/libopus.a',
     [
         '--disable-shared', '--enable-static',
@@ -112,8 +112,8 @@ liblame = AutotoolsProject(
 )
 
 ffmpeg = FfmpegProject(
-    'http://ffmpeg.org/releases/ffmpeg-4.1.1.tar.xz',
-    '373749824dfd334d84e55dff406729edfd1606575ee44dd485d97d45ea4d2d86',
+    'http://ffmpeg.org/releases/ffmpeg-4.2.1.tar.xz',
+    'cec7c87e9b60d174509e263ac4011b522385fd0775292e1670ecc1180c9bb6d4',
     'lib/libavcodec.a',
     [
         '--disable-shared', '--enable-static',
@@ -341,8 +341,8 @@ ffmpeg = FfmpegProject(
 )
 
 curl = AutotoolsProject(
-    'http://curl.haxx.se/download/curl-7.64.0.tar.xz',
-    '2f2f13fa34d44aa29cb444077ad7dc4dc6d189584ad552e0aaeb06e608af6001',
+    'http://curl.haxx.se/download/curl-7.66.0.tar.xz',
+    'dbb48088193016d079b97c5c3efde8efa56ada2ebf336e8a97d04eb8e2ed98c1',
     'lib/libcurl.a',
     [
         '--disable-shared', '--enable-static',
@@ -365,8 +365,8 @@ curl = AutotoolsProject(
 )
 
 libexpat = AutotoolsProject(
-    'https://github.com/libexpat/libexpat/releases/download/R_2_2_6/expat-2.2.6.tar.bz2',
-    '17b43c2716d521369f82fc2dc70f359860e90fa440bea65b3b85f0b246ea81f2',
+    'https://github.com/libexpat/libexpat/releases/download/R_2_2_7/expat-2.2.7.tar.bz2',
+    'cbc9102f4a31a8dafd42d642e9a3aa31e79a0aedaa1f6efd2795ebc83174ec18',
     'lib/libexpat.a',
     [
         '--disable-shared', '--enable-static',
@@ -375,8 +375,8 @@ libexpat = AutotoolsProject(
 )
 
 libnfs = AutotoolsProject(
-    'https://github.com/sahlberg/libnfs/archive/libnfs-3.0.0.tar.gz',
-    '445d92c5fc55e4a5b115e358e60486cf8f87ee50e0103d46a02e7fb4618566a5',
+    'https://github.com/sahlberg/libnfs/archive/libnfs-4.0.0.tar.gz',
+    '6ee77e9fe220e2d3e3b1f53cfea04fb319828cc7dbb97dd9df09e46e901d797d',
     'lib/libnfs.a',
     [
         '--disable-shared', '--enable-static',
@@ -387,12 +387,12 @@ libnfs = AutotoolsProject(
 
         '--disable-utils', '--disable-examples',
     ],
-    base='libnfs-libnfs-3.0.0',
+    base='libnfs-libnfs-4.0.0',
     autoreconf=True,
 )
 
 boost = BoostProject(
-    'http://downloads.sourceforge.net/project/boost/boost/1.69.0/boost_1_69_0.tar.bz2',
-    '8f32d4617390d1c2d16f26a27ab60d97807b35440d45891fa340fc2648b04406',
+    'https://dl.bintray.com/boostorg/release/1.71.0/source/boost_1_71_0.tar.bz2',
+    'd73a8da01e8bf8c7eda40b4c84915071a8c8a0df4a6734537ddde4a8580524ee',
     'include/boost/version.hpp',
 )

@@ -14,6 +14,9 @@ Once the client is connected to the server, they conduct a
 conversation until the client closes the connection. The
 conversation flow is always initiated by the client.
 
+All data between the client and the server is encoded in
+UTF-8.
+
 The client transmits a command sequence, terminated by the
 newline character ``\n``.  The server will
 respond with one or more lines, the last of which will be a
@@ -42,15 +45,43 @@ quotation marks.
 Argument strings are separated from the command and any other
 arguments by linear white-space (' ' or '\\t').
 
-All data between the client and the server is encoded in
-UTF-8.
-
 Responses
 =========
 
 A command returns ``OK`` on completion or
 ``ACK some error`` on failure.  These
 denote the end of command execution.
+
+Some commands return more data before the response ends with ``OK``.
+Each line is usually in the form ``NAME: VALUE``.  Example::
+
+  foo: bar
+  OK
+
+.. _binary:
+
+Binary Responses
+----------------
+
+Some commands can return binary data.  This is initiated by a line
+containing ``binary: 1234`` (followed as usual by a newline).  After
+that, the specified number of bytes of binary data follows, then a
+newline, and finally the ``OK`` line.
+
+If the object to be transmitted is large, the server may choose a
+reasonable chunk size and transmit only a portion.  Usually, the
+response also contains a ``size`` line which specifies the total
+(uncropped) size, and the command usually has a way to specify an
+offset into the object; this way, the client can copy the whole file
+without blocking the connection for too long.
+
+Example::
+
+  foo: bar
+  binary: 42
+  <42 bytes>
+  OK
+
 
 Failure responses
 -----------------
@@ -112,9 +143,9 @@ list begins with `command_list_begin` or
 `command_list_ok_begin` and ends with
 `command_list_end`.
 
-It does not execute any commands until the list has ended.
-The return value is whatever the return for a list of commands
-is.  On success for all commands,
+It does not execute any commands until the list has ended.  The
+response is a concatentation of all individual responses.
+On success for all commands,
 ``OK`` is returned.  If a command
 fails, no more commands are executed and the appropriate
 ``ACK`` error is returned. If
@@ -144,15 +175,20 @@ syntax::
 ``EXPRESSION`` is a string enclosed in parantheses which can be one
 of:
 
-- ``(TAG == 'VALUE')``: match a tag value.
-  ``(TAG != 'VALUE')``: mismatch a tag value.
-  The special tag "*any*" checks all
-  tag values.
-  *albumartist* looks for
+- ``(TAG == 'VALUE')``: match a tag value; if there are multiple
+  values of the given type, at least one must match.
+  ``(TAG != 'VALUE')``: mismatch a tag value; if there are multiple
+  values of the given type, none of them must match.
+  The special tag ``any`` checks all
+  tag types.
+  ``AlbumArtist`` looks for
   ``VALUE`` in ``AlbumArtist``
   and falls back to ``Artist`` tags if
   ``AlbumArtist`` does not exist.
   ``VALUE`` is what to find.
+  An empty value string means: match only if the given tag type does
+  not exist at all; this implies that negation with an empty value
+  checks for the existence of the given tag type.
 
 - ``(TAG contains 'VALUE')`` checks if the given value is a substring
   of the tag value.
@@ -173,12 +209,13 @@ of:
   file's time stamp with the given value (ISO 8601 or UNIX
   time stamp).
 
-- ``(AudioFormat == 'SAMPLERATE:BITS:CHANNELS')``:
-  compares the audio format with the given value.
+- ``(AudioFormat == 'SAMPLERATE:BITS:CHANNELS')``: compares the audio
+  format with the given value.  See :ref:`audio_output_format` for a
+  detailed explanation.
 
 - ``(AudioFormat =~ 'SAMPLERATE:BITS:CHANNELS')``:
   matches the audio format with the given mask (i.e. one
-  or more attributes may be "*").
+  or more attributes may be ``*``).
 
 - ``(!EXPRESSION)``: negate an expression.  Note that each expression
   must be enclosed in parantheses, e.g. :code:`(!(artist == 'VALUE'))`
@@ -189,7 +226,7 @@ of:
   be enclosed in parantheses, e.g. :code:`((artist == 'FOO') AND
   (album == 'BAR'))`
 
-The :command:`find` commands are case sensitive, which
+The :command:`find` commands are case sensitive, while
 :command:`search` and related commands ignore case.
 
 Prior to MPD 0.21, the syntax looked like this::
@@ -207,11 +244,11 @@ backslash.
 
 Example expression which matches an artist named ``foo'bar"``::
 
- (artist "foo\'bar\"")
+ (Artist == "foo\'bar\"")
 
 At the protocol level, the command must look like this::
 
- find "(artist \"foo\\'bar\\\"\")"
+ find "(Artist == \"foo\\'bar\\\"\")"
 
 The double quotes enclosing the artist name must be escaped because
 they are inside a double-quoted ``find`` parameter.  The single quote
@@ -246,6 +283,12 @@ The following tags are supported by :program:`MPD`:
 * **date**: the song's release date. This is usually a 4-digit year.
 * **composer**: the artist who composed the song.
 * **performer**: the artist who performed the song.
+* **conductor**: the conductor who conducted the song.
+* **work**: `"a work is a distinct intellectual or artistic creation,
+  which can be expressed in the form of one or more audio recordings" <https://musicbrainz.org/doc/Work>`_
+* **grouping**: "used if the sound belongs to a larger category of
+  sounds/music" (`from the IDv2.4.0 TIT1 description
+  <http://id3.org/id3v2.4.0-frames>`_).
 * **comment**: a human-readable comment about this song. The exact meaning of this tag is not well-defined.
 * **disc**: the decimal disc number in a multi-disc album.
 * **label**: the name of the label or publisher.
@@ -409,15 +452,18 @@ Querying :program:`MPD`'s status
     - ``songid``: playlist songid of the current song stopped on or playing
     - ``nextsong`` [#since_0_15]_: playlist song number of the next song to be played
     - ``nextsongid`` [#since_0_15]_: playlist songid of the next song to be played
-    - ``time``: total time elapsed (of current playing/paused song)
+    - ``time``: total time elapsed (of current playing/paused song) in seconds
       (deprecated, use ``elapsed`` instead)
-    - ``elapsed`` [#since_0_16]_: Total time elapsed within the current song, but with higher resolution.
+    - ``elapsed`` [#since_0_16]_: Total time elapsed within the
+      current song in seconds, but with higher resolution.
     - ``duration`` [#since_0_20]_: Duration of the current song in seconds.
     - ``bitrate``: instantaneous bitrate in kbps
     - ``xfade``: ``crossfade`` in seconds
     - ``mixrampdb``: ``mixramp`` threshold in dB
     - ``mixrampdelay``: ``mixrampdelay`` in seconds
-    - ``audio``: The format emitted by the decoder plugin during playback, format: ``*samplerate:bits:channels*``. Check the user manual for a detailed explanation.
+    - ``audio``: The format emitted by the decoder plugin during
+      playback, format: ``samplerate:bits:channels``.  See
+      :ref:`audio_output_format` for a detailed explanation.
     - ``updating_db``: ``job id``
     - ``error``: if there is an error, returns message here
 
@@ -432,7 +478,7 @@ Querying :program:`MPD`'s status
     - ``albums``: number of albums
     - ``songs``: number of songs
     - ``uptime``: daemon uptime in seconds
-    - ``db_playtime``: sum of all song times in the db
+    - ``db_playtime``: sum of all song times in the database in seconds
     - ``db_update``: last db update in UNIX time
     - ``playtime``: time length of music played
 
@@ -594,7 +640,7 @@ Whenever possible, ids should be used.
     Deletes the song ``SONGID`` from the
     playlist
 
-:command:`move {FROM} [{START:END} | {TO}]`
+:command:`move [{FROM} | {START:END}] {TO}`
     Moves the song at ``FROM`` or range of songs
     at ``START:END`` [#since_0_15]_ to ``TO``
     in the playlist.
@@ -714,7 +760,9 @@ and without the `.m3u` suffix).
 Some of the commands described in this section can be used to
 run playlist plugins instead of the hard-coded simple
 `m3u` parser.  They can access playlists in
-the music directory (relative path including the suffix) or
+the music directory (relative path including the suffix),
+playlists in arbitrary location (absolute path including the suffix;
+allowed only for clients that are connected via local socket), or
 remote playlists (absolute URI with a supported scheme).
 
 :command:`listplaylist {NAME}`
@@ -775,20 +823,21 @@ The music database
 ==================
 
 :command:`albumart {URI} {OFFSET}`
-    Searches the directory the file ``URI``
-    resides in and attempts to return a chunk of an album
+    Locate album art for the given song and return a chunk of an album
     art image file at offset ``OFFSET``.
-    Uses the filename "cover" with any of ".png, .jpg,
-    .tiff, .bmp".
+
+    This is currently implemented by searching the directory the file
+    resides in for a file called :file:`cover.png`, :file:`cover.jpg`,
+    :file:`cover.tiff` or :file:`cover.bmp`.
 
     Returns the file size and actual number
     of bytes read at the requested offset, followed
-    by the chunk requested as raw bytes, then a
+    by the chunk requested as raw bytes (see :ref:`binary`), then a
     newline and the completion code.
 
     Example::
 
-     albumart
+     albumart foo/bar.ogg 0
      size: 1024768
      binary: 8192
      <8192 bytes>
@@ -816,6 +865,17 @@ The music database
     don't this group tag.  It exists only if at least one such song is
     found.
 
+:command:`getfingerprint {URI}`
+
+    Calculate the song's audio fingerprint.  Example (abbreviated fingerprint)::
+
+      getfingerprint "foo/bar.ogg"
+      chromaprint: AQACcEmSREmWJJmkIT_6CCf64...
+      OK
+
+    This command is only available if MPD was built with
+    :file:`libchromaprint` (``-Dchromaprint=enabled``).
+
 .. _command_find:
 
 :command:`find {FILTER} [sort {TYPE}] [window {START:END}]`
@@ -842,7 +902,7 @@ The music database
 
 .. _command_findadd:
 
-:command:`findadd {FILTER}`
+:command:`findadd {FILTER} [sort {TYPE}] [window {START:END}]`
     Search the database for songs matching
     ``FILTER`` (see :ref:`Filters <filter_syntax>`) and add them to
     the queue.  Parameters have the same meaning as for
@@ -853,8 +913,7 @@ The music database
 :command:`list {TYPE} {FILTER} [group {GROUPTYPE}]`
     Lists unique tags values of the specified type.
     ``TYPE`` can be any tag supported by
-    :program:`MPD` or
-    *file*.
+    :program:`MPD`.
 
     Additional arguments may specify a :ref:`filter <filter_syntax>`.
     The *group* keyword may be used
@@ -864,6 +923,10 @@ The music database
     grouped by their respective (album) artist::
 
      list album group albumartist
+
+    ``list file`` was implemented in an early :program:`MPD` version,
+    but does not appear to make a lot of sense.  It still works (to
+    avoid breaking compatibility), but is deprecated.
 
 .. _command_listall:
 
@@ -924,7 +987,7 @@ The music database
     This command may be used to list metadata of remote
     files (e.g. URI beginning with "http://" or "smb://").
 
-    Clients that are connected via UNIX domain socket may
+    Clients that are connected via local socket may
     use this command to read the tags of an arbitrary local
     file (URI is an absolute path).
 
@@ -944,6 +1007,30 @@ The music database
     decoder plugins support it.  For example, on Ogg files,
     this lists the Vorbis comments.
 
+:command:`readpicture {URI} {OFFSET}`
+    Locate a picture for the given song and return a chunk of the
+    image file at offset ``OFFSET``.  This is usually implemented by
+    reading embedded pictures from binary tags (e.g. ID3v2's ``APIC``
+    tag).
+
+    Returns the following values:
+
+    - ``size``: the total file size
+    - ``type``: the file's MIME type (optional)
+    - ``binary``: see :ref:`binary`
+
+    If the song file was recognized, but there is no picture, the
+    response is successful, but is otherwise empty.
+
+    Example::
+
+     readpicture foo/bar.ogg 0
+     size: 1024768
+     type: image/jpeg
+     binary: 8192
+     <8192 bytes>
+     OK
+
 .. _command_search:
 
 :command:`search {FILTER} [sort {TYPE}] [window {START:END}]`
@@ -954,14 +1041,14 @@ The music database
 
 .. _command_searchadd:
 
-:command:`searchadd {FILTER}`
+:command:`searchadd {FILTER} [sort {TYPE}] [window {START:END}]`
     Search the database for songs matching
     ``FILTER`` (see :ref:`Filters <filter_syntax>`) and add them to
     the queue.
 
     Parameters have the same meaning as for :ref:`search <command_search>`.
 
-:command:`searchaddpl {NAME} {FILTER}`
+:command:`searchaddpl {NAME} {FILTER} [sort {TYPE}] [window {START:END}]`
     Search the database for songs matching
     ``FILTER`` (see :ref:`Filters <filter_syntax>`) and add them to
     the playlist named ``NAME``.
@@ -1046,7 +1133,8 @@ Stickers
 "Stickers" [#since_0_15]_ are pieces of
 information attached to existing
 :program:`MPD` objects (e.g. song files,
-directories, albums).  Clients can create arbitrary name/value
+directories, albums; but currently, they are only implemented for
+song).  Clients can create arbitrary name/value
 pairs.  :program:`MPD` itself does not assume
 any special meaning in them.
 
@@ -1215,7 +1303,7 @@ Reflection
 :command:`config`
     Dumps configuration values that may be interesting for
     the client.  This command is only permitted to "local"
-    clients (connected via UNIX domain socket).
+    clients (connected via local socket).
 
     The following response attributes are available:
 

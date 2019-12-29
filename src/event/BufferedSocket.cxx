@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -21,7 +21,7 @@
 #include "net/SocketError.hxx"
 #include "util/Compiler.h"
 
-#include <algorithm>
+#include <stdexcept>
 
 BufferedSocket::ssize_t
 BufferedSocket::DirectRead(void *data, size_t length) noexcept
@@ -110,14 +110,8 @@ BufferedSocket::OnSocketReady(unsigned flags) noexcept
 	if (flags & READ) {
 		assert(!input.IsFull());
 
-		if (!ReadToBuffer())
+		if (!ReadToBuffer() || !ResumeInput())
 			return false;
-
-		if (!ResumeInput())
-			/* we must return "true" here or
-			   SocketMonitor::Dispatch() will call
-			   Cancel() on a freed object */
-			return true;
 
 		if (!input.IsFull())
 			ScheduleRead();

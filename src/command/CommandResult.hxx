@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -40,6 +40,11 @@ enum class CommandResult {
 	 * be generated.
 	 */
 	IDLE,
+
+	/**
+	 * A #BackgroundCommand has been installed.
+	 */
+	BACKGROUND,
 
 	/**
 	 * There was an error.  The "ACK" response was sent to the

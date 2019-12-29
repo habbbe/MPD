@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -27,17 +27,17 @@
 class AllocatedPath;
 
 namespace Environment {
-	void Initialise(JNIEnv *env);
-	void Deinitialise(JNIEnv *env);
+	void Initialise(JNIEnv *env) noexcept;
+	void Deinitialise(JNIEnv *env) noexcept;
 
 	/**
 	 * Determine the mount point of the external SD card.
 	 */
 	gcc_pure
-	AllocatedPath getExternalStorageDirectory();
+	AllocatedPath getExternalStorageDirectory() noexcept;
 
 	gcc_pure
-	AllocatedPath getExternalStoragePublicDirectory(const char *type);
+	AllocatedPath getExternalStoragePublicDirectory(const char *type) noexcept;
 };
 
 #endif

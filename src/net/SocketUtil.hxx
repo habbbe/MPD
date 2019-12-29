@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -32,7 +32,7 @@ class SocketAddress;
 /**
  * Creates a socket listening on the specified address.  This is a
  * shortcut for socket(), bind() and listen().
- * When a unix socket is created (domain == AF_UNIX), its
+ * When a local socket is created (domain == AF_LOCAL), its
  * permissions will be stripped down to prevent unauthorized
  * access. The caller is responsible to apply proper permissions
  * at a later point.

@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -46,6 +46,7 @@
 #include "CrossFade.hxx"
 #include "tag/Tag.hxx"
 #include "Idle.hxx"
+#include "util/Compiler.h"
 #include "util/Domain.hxx"
 #include "thread/Name.hxx"
 #include "Log.hxx"
@@ -222,7 +223,8 @@ private:
 	 *
 	 * Caller must lock the mutex.
 	 */
-	void StartDecoder(std::shared_ptr<MusicPipe> pipe) noexcept;
+	void StartDecoder(std::unique_lock<Mutex> &lock,
+			  std::shared_ptr<MusicPipe> pipe) noexcept;
 
 	/**
 	 * The decoder has acknowledged the "START" command (see
@@ -235,14 +237,14 @@ private:
 	 * @return false if the decoder has failed, true on success
 	 * (though the decoder startup may or may not yet be finished)
 	 */
-	bool CheckDecoderStartup() noexcept;
+	bool CheckDecoderStartup(std::unique_lock<Mutex> &lock) noexcept;
 
 	/**
 	 * Stop the decoder and clears (and frees) its music pipe.
 	 *
 	 * Caller must lock the mutex.
 	 */
-	void StopDecoder() noexcept;
+	void StopDecoder(std::unique_lock<Mutex> &lock) noexcept;
 
 	/**
 	 * Is the decoder still busy on the same song as the player?
@@ -275,7 +277,8 @@ private:
 	 *
 	 * @return false if the decoder has failed
 	 */
-	bool SeekDecoder(SongTime seek_time) noexcept;
+	bool SeekDecoder(std::unique_lock<Mutex> &lock,
+			 SongTime seek_time) noexcept;
 
 	/**
 	 * This is the handler for the #PlayerCommand::SEEK command.
@@ -284,7 +287,7 @@ private:
 	 *
 	 * @return false if the decoder has failed
 	 */
-	bool SeekDecoder() noexcept;
+	bool SeekDecoder(std::unique_lock<Mutex> &lock) noexcept;
 
 	void CancelPendingSeek() noexcept {
 		pending_seek = SongTime::zero();
@@ -342,7 +345,7 @@ private:
 	 *
 	 * @return false to stop playback
 	 */
-	bool ProcessCommand() noexcept;
+	bool ProcessCommand(std::unique_lock<Mutex> &lock) noexcept;
 
 	/**
 	 * This is called at the border between two songs: the audio output
@@ -363,7 +366,8 @@ public:
 };
 
 void
-Player::StartDecoder(std::shared_ptr<MusicPipe> _pipe) noexcept
+Player::StartDecoder(std::unique_lock<Mutex> &lock,
+		     std::shared_ptr<MusicPipe> _pipe) noexcept
 {
 	assert(queued || pc.command == PlayerCommand::SEEK);
 	assert(pc.next_song != nullptr);
@@ -373,17 +377,17 @@ Player::StartDecoder(std::shared_ptr<MusicPipe> _pipe) noexcept
 
 	SongTime start_time = pc.next_song->GetStartTime() + pc.seek_time;
 
-	dc.Start(std::make_unique<DetachedSong>(*pc.next_song),
+	dc.Start(lock, std::make_unique<DetachedSong>(*pc.next_song),
 		 start_time, pc.next_song->GetEndTime(),
 		 buffer, std::move(_pipe));
 }
 
 void
-Player::StopDecoder() noexcept
+Player::StopDecoder(std::unique_lock<Mutex> &lock) noexcept
 {
 	const PlayerControl::ScopeOccupied occupied(pc);
 
-	dc.Stop();
+	dc.Stop(lock);
 
 	if (dc.pipe != nullptr) {
 		/* clear and free the decoder pipe */
@@ -500,8 +504,8 @@ Player::OpenOutput() noexcept
 	return true;
 }
 
-bool
-Player::CheckDecoderStartup() noexcept
+inline bool
+Player::CheckDecoderStartup(std::unique_lock<Mutex> &lock) noexcept
 {
 	assert(decoder_starting);
 
@@ -512,7 +516,7 @@ Player::CheckDecoderStartup() noexcept
 		/* the decoder is ready and ok */
 
 		if (output_open &&
-		    !pc.WaitOutputConsumed(1))
+		    !pc.WaitOutputConsumed(lock, 1))
 			/* the output devices havn't finished playing
 			   all chunks yet - wait for that */
 			return true;
@@ -534,7 +538,7 @@ Player::CheckDecoderStartup() noexcept
 		if (pending_seek > SongTime::zero()) {
 			assert(pc.seeking);
 
-			bool success = SeekDecoder(pending_seek);
+			bool success = SeekDecoder(lock, pending_seek);
 			pc.seeking = false;
 			pc.ClientSignal();
 			if (!success)
@@ -562,14 +566,14 @@ Player::CheckDecoderStartup() noexcept
 	} else {
 		/* the decoder is not yet ready; wait
 		   some more */
-		dc.WaitForDecoder();
+		dc.WaitForDecoder(lock);
 
 		return true;
 	}
 }
 
 bool
-Player::SeekDecoder(SongTime seek_time) noexcept
+Player::SeekDecoder(std::unique_lock<Mutex> &lock, SongTime seek_time) noexcept
 {
 	assert(song);
 	assert(!decoder_starting);
@@ -583,7 +587,7 @@ Player::SeekDecoder(SongTime seek_time) noexcept
 	try {
 		const PlayerControl::ScopeOccupied occupied(pc);
 
-		dc.Seek(song->GetStartTime() + seek_time);
+		dc.Seek(lock, song->GetStartTime() + seek_time);
 	} catch (...) {
 		/* decoder failure */
 		pc.SetError(PlayerError::DECODER, std::current_exception());
@@ -595,9 +599,22 @@ Player::SeekDecoder(SongTime seek_time) noexcept
 }
 
 inline bool
-Player::SeekDecoder() noexcept
+Player::SeekDecoder(std::unique_lock<Mutex> &lock) noexcept
 {
 	assert(pc.next_song != nullptr);
+
+	if (pc.seek_time > SongTime::zero() && // TODO: allow this only if the song duration is known
+	    dc.IsUnseekableCurrentSong(*pc.next_song)) {
+		/* seeking into the current song; but we already know
+		   it's not seekable, so let's fail early */
+		/* note the seek_time>0 check: if seeking to the
+		   beginning, we can simply restart the decoder */
+		pc.next_song.reset();
+		pc.SetError(PlayerError::DECODER,
+			    std::make_exception_ptr(std::runtime_error("Not seekable")));
+		pc.CommandFinished();
+		return true;
+	}
 
 	CancelPendingSeek();
 
@@ -612,14 +629,14 @@ Player::SeekDecoder() noexcept
 		/* the decoder is already decoding the "next" song -
 		   stop it and start the previous song again */
 
-		StopDecoder();
+		StopDecoder(lock);
 
 		/* clear music chunks which might still reside in the
 		   pipe */
 		pipe->Clear();
 
 		/* re-start the decoder */
-		StartDecoder(pipe);
+		StartDecoder(lock, pipe);
 		ActivateDecoder();
 
 		pc.seeking = true;
@@ -650,7 +667,7 @@ Player::SeekDecoder() noexcept
 		} else {
 			/* send the SEEK command */
 
-			if (!SeekDecoder(pc.seek_time)) {
+			if (!SeekDecoder(lock, pc.seek_time)) {
 				pc.CommandFinished();
 				return false;
 			}
@@ -668,7 +685,7 @@ Player::SeekDecoder() noexcept
 }
 
 inline bool
-Player::ProcessCommand() noexcept
+Player::ProcessCommand(std::unique_lock<Mutex> &lock) noexcept
 {
 	switch (pc.command) {
 	case PlayerCommand::NONE:
@@ -697,7 +714,7 @@ Player::ProcessCommand() noexcept
 		pc.CommandFinished();
 
 		if (dc.IsIdle())
-			StartDecoder(std::make_shared<MusicPipe>());
+			StartDecoder(lock, std::make_shared<MusicPipe>());
 
 		break;
 
@@ -720,7 +737,7 @@ Player::ProcessCommand() noexcept
 		break;
 
 	case PlayerCommand::SEEK:
-		return SeekDecoder();
+		return SeekDecoder(lock);
 
 	case PlayerCommand::CANCEL:
 		if (pc.next_song == nullptr)
@@ -732,7 +749,7 @@ Player::ProcessCommand() noexcept
 		if (IsDecoderAtNextSong())
 			/* the decoder is already decoding the song -
 			   stop it and reset the position */
-			StopDecoder();
+			StopDecoder(lock);
 
 		pc.next_song.reset();
 		queued = false;
@@ -865,7 +882,7 @@ Player::PlayNextChunk() noexcept
 		} else {
 			/* there are not enough decoded chunks yet */
 
-			const std::lock_guard<Mutex> lock(pc.mutex);
+			std::unique_lock<Mutex> lock(pc.mutex);
 
 			if (dc.IsIdle()) {
 				/* the decoder isn't running, abort
@@ -874,7 +891,7 @@ Player::PlayNextChunk() noexcept
 			} else {
 				/* wait for the decoder */
 				dc.Signal();
-				dc.WaitForDecoder();
+				dc.WaitForDecoder(lock);
 
 				return true;
 			}
@@ -960,20 +977,20 @@ Player::Run() noexcept
 {
 	pipe = std::make_shared<MusicPipe>();
 
-	const std::lock_guard<Mutex> lock(pc.mutex);
+	std::unique_lock<Mutex> lock(pc.mutex);
 
-	StartDecoder(pipe);
+	StartDecoder(lock, pipe);
 	ActivateDecoder();
 
 	pc.state = PlayerState::PLAY;
 
 	pc.CommandFinished();
 
-	while (ProcessCommand()) {
+	while (ProcessCommand(lock)) {
 		if (decoder_starting) {
 			/* wait until the decoder is initialized completely */
 
-			if (!CheckDecoderStartup())
+			if (!CheckDecoderStartup(lock))
 				break;
 
 			continue;
@@ -988,7 +1005,7 @@ Player::Run() noexcept
 			    !dc.IsIdle() && !buffer.IsFull()) {
 				/* not enough decoded buffer space yet */
 
-				dc.WaitForDecoder();
+				dc.WaitForDecoder(lock);
 				continue;
 			} else {
 				/* buffering is complete */
@@ -996,13 +1013,13 @@ Player::Run() noexcept
 			}
 		}
 
-		if (dc.IsIdle() && queued && dc.pipe == pipe) {
+		if (dc.IsIdle() && queued && IsDecoderAtCurrentSong()) {
 			/* the decoder has finished the current song;
 			   make it decode the next song */
 
 			assert(dc.pipe == nullptr || dc.pipe == pipe);
 
-			StartDecoder(std::make_shared<MusicPipe>());
+			StartDecoder(lock, std::make_shared<MusicPipe>());
 		}
 
 		if (/* no cross-fading if MPD is going to pause at the
@@ -1034,7 +1051,7 @@ Player::Run() noexcept
 
 		if (paused) {
 			if (pc.command == PlayerCommand::NONE)
-				pc.Wait();
+				pc.Wait(lock);
 		} else if (!pipe->IsEmpty()) {
 			/* at least one music chunk is ready - send it
 			   to the audio output */
@@ -1052,12 +1069,22 @@ Player::Run() noexcept
 			// TODO: eliminate this kludge
 			dc.Signal();
 
-			dc.WaitForDecoder();
+			dc.WaitForDecoder(lock);
 		} else if (IsDecoderAtNextSong()) {
 			/* at the beginning of a new song */
 
 			SongBorder();
 		} else if (dc.IsIdle()) {
+			if (queued)
+				/* the decoder has just stopped,
+				   between the two IsIdle() checks,
+				   probably while UnlockCheckOutputs()
+				   left the mutex unlocked; to restart
+				   the decoder instead of stopping
+				   playback completely, let's re-enter
+				   this loop */
+				continue;
+
 			/* check the size of the pipe again, because
 			   the decoder thread may have added something
 			   since we last checked */
@@ -1079,12 +1106,12 @@ Player::Run() noexcept
 			// TODO: eliminate this kludge
 			dc.Signal();
 
-			dc.WaitForDecoder();
+			dc.WaitForDecoder(lock);
 		}
 	}
 
 	CancelPendingSeek();
-	StopDecoder();
+	StopDecoder(lock);
 
 	pipe.reset();
 
@@ -1119,13 +1146,14 @@ try {
 	SetThreadName("player");
 
 	DecoderControl dc(mutex, cond,
+			  input_cache,
 			  configured_audio_format,
 			  replay_gain_config);
 	dc.StartThread();
 
 	MusicBuffer buffer(buffer_chunks);
 
-	const std::lock_guard<Mutex> lock(mutex);
+	std::unique_lock<Mutex> lock(mutex);
 
 	while (1) {
 		switch (command) {
@@ -1148,6 +1176,7 @@ try {
 			}
 
 			/* fall through */
+			gcc_fallthrough;
 
 		case PlayerCommand::PAUSE:
 			next_song.reset();
@@ -1198,7 +1227,7 @@ try {
 			break;
 
 		case PlayerCommand::NONE:
-			Wait();
+			Wait(lock);
 			break;
 		}
 	}

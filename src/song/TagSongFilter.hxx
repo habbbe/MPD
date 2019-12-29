@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -25,10 +25,8 @@
 
 #include <stdint.h>
 
-template<typename T> struct ConstBuffer;
 enum TagType : uint8_t;
 struct Tag;
-struct TagItem;
 struct LightSong;
 
 class TagSongFilter final : public ISongFilter {
@@ -68,8 +66,7 @@ public:
 	bool Match(const LightSong &song) const noexcept override;
 
 private:
-	bool MatchNN(const Tag &tag) const noexcept;
-	bool MatchNN(const TagItem &tag) const noexcept;
+	bool Match(const Tag &tag) const noexcept;
 };
 
 #endif

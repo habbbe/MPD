@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -29,8 +29,6 @@
 extern "C" {
 #include <libavutil/log.h>
 }
-
-#include <stdio.h>
 
 gcc_const
 static LogLevel
@@ -62,6 +60,6 @@ FfmpegLogCallback(gcc_unused void *ptr, int level, const char *fmt, va_list vl)
 					 ffmpeg_domain.GetName(),
 					 cls->item_name(ptr));
 		const Domain d(domain);
-		LogFormatV(d, FfmpegImportLogLevel(level), fmt, vl);
+		LogFormatV(FfmpegImportLogLevel(level), d, fmt, vl);
 	}
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -33,7 +33,9 @@
 #include "TagFile.hxx"
 #include "fs/Traits.hxx"
 #include "fs/AllocatedPath.hxx"
-#include "util/ASCII.hxx"
+#include "util/StringView.hxx"
+
+#include <memory>
 
 #include <string.h>
 
@@ -56,18 +58,10 @@ public:
 	 */
 	char *next;
 
-	CueParser *parser;
+	std::unique_ptr<CueParser> parser;
 
 public:
-	EmbeddedCuePlaylist()
-		:parser(nullptr) {
-	}
-
-	virtual ~EmbeddedCuePlaylist() {
-		delete parser;
-	}
-
-	virtual std::unique_ptr<DetachedSong> NextSong() override;
+	std::unique_ptr<DetachedSong> NextSong() override;
 };
 
 class ExtractCuesheetTagHandler final : public NullTagHandler {
@@ -76,15 +70,14 @@ public:
 
 	ExtractCuesheetTagHandler() noexcept:NullTagHandler(WANT_PAIR) {}
 
-	void OnPair(const char *key, const char *value) noexcept override;
+	void OnPair(StringView key, StringView value) noexcept override;
 };
 
 void
-ExtractCuesheetTagHandler::OnPair(const char *name, const char *value) noexcept
+ExtractCuesheetTagHandler::OnPair(StringView name, StringView value) noexcept
 {
-	if (cuesheet.empty() &&
-	    StringEqualsCaseASCII(name, "cuesheet"))
-		cuesheet = value;
+	if (cuesheet.empty() && name.EqualsIgnoreCase("cuesheet"))
+		cuesheet = {value.data, value.size};
 }
 
 static std::unique_ptr<SongEnumerator>
@@ -113,7 +106,7 @@ embcue_playlist_open_uri(const char *uri,
 	playlist->cuesheet = std::move(extract_cuesheet.cuesheet);
 
 	playlist->next = &playlist->cuesheet[0];
-	playlist->parser = new CueParser();
+	playlist->parser = std::make_unique<CueParser>();
 
 	return playlist;
 }
@@ -166,15 +159,6 @@ static const char *const embcue_playlist_suffixes[] = {
 	nullptr
 };
 
-const struct playlist_plugin embcue_playlist_plugin = {
-	"embcue",
-
-	nullptr,
-	nullptr,
-	embcue_playlist_open_uri,
-	nullptr,
-
-	nullptr,
-	embcue_playlist_suffixes,
-	nullptr,
-};
+const PlaylistPlugin embcue_playlist_plugin =
+	PlaylistPlugin("embcue", embcue_playlist_open_uri)
+	.WithSuffixes(embcue_playlist_suffixes);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -25,7 +25,7 @@
 
 #include "AudioParser.hxx"
 #include "AudioFormat.hxx"
-#include "pcm/PcmConvert.hxx"
+#include "pcm/Convert.hxx"
 #include "util/ConstBuffer.hxx"
 #include "util/StaticFifoBuffer.hxx"
 #include "util/PrintException.hxx"
@@ -53,8 +53,7 @@ try {
 
 	const size_t in_frame_size = in_audio_format.GetFrameSize();
 
-	PcmConvert state;
-	state.Open(in_audio_format, out_audio_format);
+	PcmConvert state(in_audio_format, out_audio_format);
 
 	StaticFifoBuffer<uint8_t, 4096> buffer;
 
@@ -93,8 +92,6 @@ try {
 		gcc_unused ssize_t ignored = write(1, output.data,
 						   output.size);
 	}
-
-	state.Close();
 
 	return EXIT_SUCCESS;
 } catch (...) {

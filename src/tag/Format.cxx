@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -20,9 +20,9 @@
 #include "Format.hxx"
 #include "Tag.hxx"
 #include "ParseName.hxx"
+#include "time/Convert.hxx"
 #include "util/format.h"
 #include "util/TruncateString.hxx"
-#include "util/TimeConvert.hxx"
 
 #include <algorithm>
 

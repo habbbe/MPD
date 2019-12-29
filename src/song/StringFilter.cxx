@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -18,17 +18,14 @@
  */
 
 #include "StringFilter.hxx"
-#include "util/StringCompare.hxx"
+#include "util/StringAPI.hxx"
 
 #include <assert.h>
 
-inline bool
+bool
 StringFilter::MatchWithoutNegation(const char *s) const noexcept
 {
-#if !CLANG_CHECK_VERSION(3,6)
-	/* disabled on clang due to -Wtautological-pointer-compare */
 	assert(s != nullptr);
-#endif
 
 #ifdef HAVE_PCRE
 	if (regex)

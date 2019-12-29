@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -27,6 +27,7 @@
 #include "../ArchiveVisitor.hxx"
 #include "input/InputStream.hxx"
 #include "fs/Path.hxx"
+#include "system/Error.hxx"
 #include "util/RuntimeError.hxx"
 
 #include <zzip/zzip.h>
@@ -110,9 +111,10 @@ public:
 	}
 
 	/* virtual methods from InputStream */
-	bool IsEOF() noexcept override;
-	size_t Read(void *ptr, size_t size) override;
-	void Seek(offset_type offset) override;
+	bool IsEOF() const noexcept override;
+	size_t Read(std::unique_lock<Mutex> &lock,
+		    void *ptr, size_t size) override;
+	void Seek(std::unique_lock<Mutex> &lock, offset_type offset) override;
 };
 
 InputStreamPtr
@@ -120,9 +122,19 @@ ZzipArchiveFile::OpenStream(const char *pathname,
 			    Mutex &mutex)
 {
 	ZZIP_FILE *_file = zzip_file_open(dir->dir, pathname, 0);
-	if (_file == nullptr)
-		throw FormatRuntimeError("not found in the ZIP file: %s",
-					 pathname);
+	if (_file == nullptr) {
+		const auto error = (zzip_error_t)zzip_error(dir->dir);
+		switch (error) {
+		case ZZIP_ENOENT:
+			throw FormatFileNotFound("Failed to open '%s' in ZIP file",
+						 pathname);
+
+		default:
+			throw FormatRuntimeError("Failed to open '%s' in ZIP file: %s",
+						 pathname,
+						 zzip_strerror(error));
+		}
+	}
 
 	return std::make_unique<ZzipInputStream>(dir, pathname,
 						 mutex,
@@ -130,7 +142,7 @@ ZzipArchiveFile::OpenStream(const char *pathname,
 }
 
 size_t
-ZzipInputStream::Read(void *ptr, size_t read_size)
+ZzipInputStream::Read(std::unique_lock<Mutex> &, void *ptr, size_t read_size)
 {
 	const ScopeUnlock unlock(mutex);
 
@@ -143,13 +155,13 @@ ZzipInputStream::Read(void *ptr, size_t read_size)
 }
 
 bool
-ZzipInputStream::IsEOF() noexcept
+ZzipInputStream::IsEOF() const noexcept
 {
 	return offset_type(zzip_tell(file)) == size;
 }
 
 void
-ZzipInputStream::Seek(offset_type new_offset)
+ZzipInputStream::Seek(std::unique_lock<Mutex> &, offset_type new_offset)
 {
 	const ScopeUnlock unlock(mutex);
 

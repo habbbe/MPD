@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -90,7 +90,7 @@ calc_hash(TagType type, const char *p) noexcept
 	return hash ^ type;
 }
 
-static inline constexpr TagPoolSlot *
+static constexpr TagPoolSlot *
 tag_item_to_slot(TagItem *item) noexcept
 {
 	return &ContainerCast(*item, &TagPoolSlot::item);

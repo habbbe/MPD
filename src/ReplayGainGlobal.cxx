@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -19,9 +19,9 @@
 
 #include "ReplayGainGlobal.hxx"
 #include "ReplayGainConfig.hxx"
-#include "config/Param.hxx"
 #include "config/Data.hxx"
-#include "util/RuntimeError.hxx"
+
+#include <stdexcept>
 
 #include <assert.h>
 #include <stdlib.h>
@@ -43,29 +43,22 @@ ParsePreamp(const char *s)
 	return pow(10, f / 20.0);
 }
 
-static float
-ParsePreamp(const ConfigParam &p)
-{
-	try {
-		return ParsePreamp(p.value.c_str());
-	} catch (...) {
-		std::throw_with_nested(FormatRuntimeError("Failed to parse line %i",
-							  p.line));
-	}
-}
-
 ReplayGainConfig
 LoadReplayGainConfig(const ConfigData &config)
 {
 	ReplayGainConfig replay_gain_config;
 
-	const auto *param = config.GetParam(ConfigOption::REPLAYGAIN_PREAMP);
-	if (param)
-		replay_gain_config.preamp = ParsePreamp(*param);
+	replay_gain_config.preamp = config.With(ConfigOption::REPLAYGAIN_PREAMP, [](const char *s){
+		return s != nullptr
+			? ParsePreamp(s)
+			: 1.0;
+	});
 
-	param = config.GetParam(ConfigOption::REPLAYGAIN_MISSING_PREAMP);
-	if (param)
-		replay_gain_config.missing_preamp = ParsePreamp(*param);
+	replay_gain_config.missing_preamp = config.With(ConfigOption::REPLAYGAIN_MISSING_PREAMP, [](const char *s){
+		return s != nullptr
+			? ParsePreamp(s)
+			: 1.0;
+	});
 
 	replay_gain_config.limit = config.GetBool(ConfigOption::REPLAYGAIN_LIMIT,
 						  ReplayGainConfig::DEFAULT_LIMIT);

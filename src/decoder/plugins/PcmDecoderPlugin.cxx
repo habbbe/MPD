@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -17,12 +17,14 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
+#include "config.h"
+
 #include "PcmDecoderPlugin.hxx"
 #include "../DecoderAPI.hxx"
 #include "CheckAudioFormat.hxx"
-#include "pcm/PcmPack.hxx"
+#include "pcm/Pack.hxx"
 #include "input/InputStream.hxx"
-#include "system/ByteOrder.hxx"
+#include "util/ByteOrder.hxx"
 #include "util/Domain.hxx"
 #include "util/ByteReverse.hxx"
 #include "util/StaticFifoBuffer.hxx"
@@ -30,9 +32,12 @@
 #include "util/MimeType.hxx"
 #include "Log.hxx"
 
+#ifdef ENABLE_ALSA
+#include "AudioParser.hxx"
+#endif
+
 #include <exception>
 
-#include <assert.h>
 #include <string.h>
 
 static constexpr Domain pcm_decoder_domain("pcm_decoder");
@@ -133,6 +138,22 @@ pcm_stream_decode(DecoderClient &client, InputStream &is)
 
 			audio_format.channels = value;
 		}
+
+#ifdef ENABLE_ALSA
+		if (GetMimeTypeBase(mime) == "audio/x-mpd-alsa-pcm") {
+			i = mime_parameters.find("format");
+			if (i != mime_parameters.end()) {
+				const char *s = i->second.c_str();
+				audio_format = ParseAudioFormat(s, false);
+				if (!audio_format.IsFullyDefined()) {
+					FormatWarning(pcm_decoder_domain,
+							  "Invalid audio format specification: %s",
+							  mime);
+					return;
+				}
+			}
+		}
+#endif
 	}
 
 	if (audio_format.sample_rate == 0) {
@@ -221,18 +242,14 @@ static const char *const pcm_mime_types[] = {
 	/* same as above, but with reverse byte order */
 	"audio/x-mpd-cdda-pcm-reverse",
 
+#ifdef ENABLE_ALSA
+	/* for streams obtained by the alsa input plugin */
+	"audio/x-mpd-alsa-pcm",
+#endif
+
 	nullptr
 };
 
-const struct DecoderPlugin pcm_decoder_plugin = {
-	"pcm",
-	nullptr,
-	nullptr,
-	pcm_stream_decode,
-	nullptr,
-	nullptr,
-	nullptr,
-	nullptr,
-	nullptr,
-	pcm_mime_types,
-};
+constexpr DecoderPlugin pcm_decoder_plugin =
+	DecoderPlugin("pcm", pcm_stream_decode, nullptr)
+	.WithMimeTypes(pcm_mime_types);

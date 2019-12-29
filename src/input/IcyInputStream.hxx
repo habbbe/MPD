@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -52,9 +52,12 @@ public:
 	 * with our input; it needs to be shared because our input
 	 * needs to feed parameters (e.g. from the "icy-metaint"
 	 * header) into it
+	 *
+	 * Throws on error (e.g. if the charset converter specified by
+	 * the URI fragment fails to initialize).
 	 */
 	IcyInputStream(InputStreamPtr _input,
-		       std::shared_ptr<IcyMetaDataParser> _parser) noexcept;
+		       std::shared_ptr<IcyMetaDataParser> _parser);
 	virtual ~IcyInputStream() noexcept;
 
 	IcyInputStream(const IcyInputStream &) = delete;
@@ -65,8 +68,9 @@ public:
 
 	/* virtual methods from InputStream */
 	void Update() noexcept override;
-	std::unique_ptr<Tag> ReadTag() override;
-	size_t Read(void *ptr, size_t size) override;
+	std::unique_ptr<Tag> ReadTag() noexcept override;
+	size_t Read(std::unique_lock<Mutex> &lock,
+		    void *ptr, size_t size) override;
 };
 
 #endif

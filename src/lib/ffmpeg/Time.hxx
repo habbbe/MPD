@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -53,7 +53,7 @@ FfmpegTimeToDouble(int64_t t, const AVRational time_base) noexcept
  * Convert a std::ratio to a #AVRational.
  */
 template<typename Ratio>
-static inline constexpr AVRational
+constexpr AVRational
 RatioToAVRational()
 {
 	return { Ratio::num, Ratio::den };
@@ -99,7 +99,7 @@ ToFfmpegTime(SongTime t, const AVRational time_base) noexcept
 /**
  * Replace #AV_NOPTS_VALUE with the given fallback.
  */
-static constexpr int64_t
+constexpr int64_t
 FfmpegTimestampFallback(int64_t t, int64_t fallback)
 {
 	return gcc_likely(t != int64_t(AV_NOPTS_VALUE))

@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -24,23 +24,19 @@
 #include "thread/Mutex.hxx"
 #include "input/InputStream.hxx"
 #include "input/LocalOpen.hxx"
-#include "Log.hxx"
 #include "config.h"
 
-#include <exception>
-
 bool
-ScanGenericTags(InputStream &is, TagHandler &handler) noexcept
+ScanGenericTags(InputStream &is, TagHandler &handler)
 {
+	if (!is.IsSeekable())
+		return false;
+
 	if (tag_ape_scan2(is, handler))
 		return true;
 
 #ifdef ENABLE_ID3TAG
-	try {
-		is.LockRewind();
-	} catch (...) {
-		return false;
-	}
+	is.LockRewind();
 
 	return tag_id3_scan(is, handler);
 #else
@@ -49,13 +45,10 @@ ScanGenericTags(InputStream &is, TagHandler &handler) noexcept
 }
 
 bool
-ScanGenericTags(Path path, TagHandler &handler) noexcept
-try {
+ScanGenericTags(Path path, TagHandler &handler)
+{
 	Mutex mutex;
 
 	auto is = OpenLocalInputStream(path, mutex);
 	return ScanGenericTags(*is, handler);
-} catch (...) {
-	LogError(std::current_exception());
-	return false;
 }

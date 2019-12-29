@@ -9,6 +9,11 @@ db_api_dep = declare_dependency(
   link_with: db_api,
 )
 
+if not enable_database
+  db_glue_dep = db_api_dep
+  subdir_done()
+endif
+
 subdir('plugins')
 
 db_glue_sources = [
@@ -22,8 +27,10 @@ db_glue_sources = [
   'update/Walk.cxx',
   'update/UpdateSong.cxx',
   'update/Container.cxx',
+  'update/Playlist.cxx',
   'update/Remove.cxx',
   'update/ExcludeList.cxx',
+  'update/VirtualDirectory.cxx',
   'DatabaseGlue.cxx',
   'Configured.cxx',
   'DatabaseSong.cxx',

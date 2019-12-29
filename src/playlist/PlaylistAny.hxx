@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2018 The Music Player Daemon Project
+ * Copyright 2003-2019 The Music Player Daemon Project
  * http://www.musicpd.org
  *
  * This program is free software; you can redistribute it and/or modify
@@ -20,11 +20,11 @@
 #ifndef MPD_PLAYLIST_ANY_HXX
 #define MPD_PLAYLIST_ANY_HXX
 
+#include "thread/Mutex.hxx"
 #include "config.h"
 
 #include <memory>
 
-class Mutex;
 class SongEnumerator;
 class Storage;
 
@@ -34,7 +34,7 @@ class Storage;
  * music or playlist directory.
  */
 std::unique_ptr<SongEnumerator>
-playlist_open_any(const char *uri,
+playlist_open_any(const LocatedUri &located_uri,
 #ifdef ENABLE_DATABASE
 		  const Storage *storage,
 #endif

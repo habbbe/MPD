@@ -1,11 +1,11 @@
 project(
   'mpd',
   ['c', 'cpp'],
-  version: '0.21.6',
-  meson_version: '>= 0.47.2',
+  version: '0.22~git',
+  meson_version: '>= 0.49.0',
   default_options: [
     'c_std=c99',
-    'cpp_std=c++14'
+    'cpp_std=c++17'
   ],
   license: 'GPLv2+',
 )
@@ -15,12 +15,18 @@ version_cxx = vcs_tag(input: 'src/GitVersion.cxx', output: 'GitVersion.cxx')
 compiler = meson.get_compiler('cpp')
 c_compiler = meson.get_compiler('c')
 
+if compiler.get_id() == 'gcc' and compiler.version().version_compare('<7')
+  warning('Your GCC version is too old.  You need at least version 7.')
+elif compiler.get_id() == 'clang' and compiler.version().version_compare('<4')
+  warning('Your clang version is too old.  You need at least version 4.')
+endif
+
 conf = configuration_data()
 conf.set_quoted('PACKAGE', meson.project_name())
 conf.set_quoted('PACKAGE_NAME', meson.project_name())
 conf.set_quoted('PACKAGE_VERSION', meson.project_version())
 conf.set_quoted('VERSION', meson.project_version())
-conf.set_quoted('PROTOCOL_VERSION', '0.21.4')
+conf.set_quoted('PROTOCOL_VERSION', '0.22.0')
 conf.set_quoted('SYSTEM_CONFIG_FILE_LOCATION', join_paths(get_option('prefix'), get_option('sysconfdir'), 'mpd.conf'))
 
 common_cppflags = [
@@ -36,6 +42,8 @@ common_cxxflags = [
 test_common_flags = [
   '-Wall',
   '-Wextra',
+
+  '-Wvla',
 
   '-fvisibility=hidden',
 
@@ -206,19 +214,21 @@ sources = [
   'src/decoder/DecoderPrint.cxx',
   'src/client/Listener.cxx',
   'src/client/Client.cxx',
-  'src/client/ClientEvent.cxx',
-  'src/client/ClientExpire.cxx',
-  'src/client/ClientGlobal.cxx',
-  'src/client/ClientIdle.cxx',
-  'src/client/ClientList.cxx',
-  'src/client/ClientNew.cxx',
-  'src/client/ClientProcess.cxx',
-  'src/client/ClientRead.cxx',
-  'src/client/ClientWrite.cxx',
-  'src/client/ClientMessage.cxx',
-  'src/client/ClientSubscribe.cxx',
-  'src/client/ClientFile.cxx',
+  'src/client/Config.cxx',
+  'src/client/Domain.cxx',
+  'src/client/Event.cxx',
+  'src/client/Expire.cxx',
+  'src/client/Idle.cxx',
+  'src/client/List.cxx',
+  'src/client/New.cxx',
+  'src/client/Process.cxx',
+  'src/client/Read.cxx',
+  'src/client/Write.cxx',
+  'src/client/Message.cxx',
+  'src/client/Subscribe.cxx',
+  'src/client/File.cxx',
   'src/client/Response.cxx',
+  'src/client/ThreadBackgroundCommand.cxx',
   'src/Listen.cxx',
   'src/LogInit.cxx',
   'src/LogBackend.cxx',
@@ -267,6 +277,7 @@ sources = [
   'src/TagSave.cxx',
   'src/TagFile.cxx',
   'src/TagStream.cxx',
+  'src/TagAny.cxx',
   'src/TimePrint.cxx',
   'src/mixer/Volume.cxx',
   'src/PlaylistFile.cxx',
@@ -298,6 +309,7 @@ if enable_database
 endif
 
 subdir('src/util')
+subdir('src/time')
 subdir('src/system')
 subdir('src/thread')
 subdir('src/event')
@@ -308,6 +320,7 @@ subdir('src/lib/smbclient')
 subdir('src/lib/zlib')
 
 subdir('src/lib/alsa')
+subdir('src/lib/chromaprint')
 subdir('src/lib/curl')
 subdir('src/lib/expat')
 subdir('src/lib/ffmpeg')
@@ -321,6 +334,8 @@ subdir('src/lib/sqlite')
 subdir('src/lib/systemd')
 subdir('src/lib/upnp')
 subdir('src/lib/yajl')
+
+subdir('src/lib/crypto')
 
 subdir('src/fs')
 subdir('src/config')
@@ -347,9 +362,16 @@ endif
 if sqlite_dep.found()
   sources += [
     'src/command/StickerCommands.cxx',
-    'src/sticker/StickerDatabase.cxx',
-    'src/sticker/StickerPrint.cxx',
+    'src/sticker/Database.cxx',
+    'src/sticker/Print.cxx',
     'src/sticker/SongSticker.cxx',
+  ]
+endif
+
+if chromaprint_dep.found()
+  sources += [
+    'src/command/FingerprintCommands.cxx',
+    'src/lib/chromaprint/DecoderClient.cxx',
   ]
 endif
 
@@ -367,8 +389,10 @@ basic_dep = declare_dependency(
 
 if enable_database
   subdir('src/storage')
-  subdir('src/db')
+else
+  storage_glue_dep = dependency('', required: false)
 endif
+subdir('src/db')
 
 if neighbor_glue_dep.found()
   sources += 'src/command/NeighborCommands.cxx'
@@ -377,8 +401,11 @@ endif
 if archive_glue_dep.found()
   sources += [
     'src/TagArchive.cxx',
-    'src/db/update/Archive.cxx',
   ]
+
+  if enable_database
+    sources += ['src/db/update/Archive.cxx']
+  endif
 endif
 
 if is_windows
@@ -390,6 +417,7 @@ more_deps = []
 if is_android
   subdir('src/java')
   target_type = 'shared_library'
+  target_name = 'mpd'
   link_args += [
     '-Wl,--no-undefined,-shared,-Bsymbolic',
     '-llog',
@@ -399,12 +427,20 @@ if is_android
     declare_dependency(sources: [classes_jar]),
     java_dep,
   ]
+elif is_haiku
+  target_type = 'executable'
+  target_name = 'mpd.nores'
+  link_args += [
+    '-lnetwork',
+    '-lbe',
+  ]
 else
   target_type = 'executable'
+  target_name = 'mpd'
 endif
 
 mpd = build_target(
-  'mpd',
+  target_name,
   sources,
   target_type: target_type,
   include_directories: inc,
@@ -432,6 +468,7 @@ mpd = build_target(
     sqlite_dep,
     zeroconf_dep,
     more_deps,
+    chromaprint_dep,
   ],
   link_args: link_args,
   install: not is_android and not is_haiku,
@@ -443,6 +480,14 @@ endif
 
 if is_haiku
   subdir('src/haiku')
+  custom_target(
+    'mpd',
+    output: 'mpd',
+    input: [mpd, rsrc],
+    command: [addres, '@OUTPUT@', '@INPUT0@', '@INPUT1@'],
+    install: true,
+    install_dir: get_option('bindir'),
+  )
 endif
 
 configure_file(output: 'config.h', configuration: conf)
