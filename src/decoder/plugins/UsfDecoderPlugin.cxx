@@ -25,6 +25,7 @@
 #include "util/Domain.hxx"
 #include "Log.hxx"
 #include "util/ScopeExit.hxx"
+#include "util/StringView.hxx"
 #include "tag/Table.hxx"
 
 #include <usf.h>
@@ -190,7 +191,7 @@ usf_tags_target(void *context, const char *name, const char *value)
     TagType type = tag_table_lookup(usf_tags, name);
 
     if (type != TAG_NUM_OF_ITEM_TYPES) {
-        tags.tag_handler.OnTag(type, value);
+        tags.tag_handler.OnTag(type, StringView(value));
     } else {
         set_length_from_tags(tags.length, name, value);
     }
@@ -304,7 +305,7 @@ usf_file_decode(DecoderClient &client, Path path_fs)
 }
 
 static bool
-usf_scan_file(Path path_fs, TagHandler &handler) 
+usf_scan_file(Path path_fs, TagHandler &handler) noexcept
 {
     UsfTags tags(handler);
     const int psf_version = psf_load(
@@ -334,15 +335,6 @@ static const char *const usf_suffixes[] = {
 };
 
 extern const struct DecoderPlugin usf_decoder_plugin;
-const struct DecoderPlugin usf_decoder_plugin = {
-	"usf",
-	nullptr,
-	nullptr,
-    nullptr,
-	usf_file_decode,
-	usf_scan_file,
-	nullptr, /* stream_tag() */
-	nullptr,
-	usf_suffixes,
-	nullptr, /* mime_types */
-};
+constexpr DecoderPlugin usf_decoder_plugin = 
+	DecoderPlugin("usf", usf_file_decode, usf_scan_file)
+    .WithSuffixes(usf_suffixes);
